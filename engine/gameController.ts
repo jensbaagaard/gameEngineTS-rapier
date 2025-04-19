@@ -1,38 +1,37 @@
-import Debug from "./Debug/Debug";
 import { v7 as uuidv7 } from "uuid";
 import type { GameObject } from "./Gameobject/GameObject";
 import { PhysicsController } from "./physics/physicsController";
 import type { Position, Scene } from "./interfaces/Scene";
 import { InputController } from "./inputController";
+import type { EngineOptions } from "./physics/EngineOptions";
+import { defaultEngineOptions } from "./physics/EngineOptions";
+import { defaultRenderOptions } from "./physics/RenderOptions";
+import type { RenderOptions } from "./physics/RenderOptions";
 
 export class GameController {
   private html: HTMLElement;
   private currentScene: Scene;
   private isRunning: boolean = false;
+  public engineOptions: EngineOptions;
+  public renderOptions: RenderOptions;
   public lastFrameTime: number = 0;
   public deltaTime: number = 0;
   public gameObjects: { [uuid: string]: GameObject } = {};
 
   private physicsController: PhysicsController | null = null;
-  private inputController: InputController;
+  public inputController: InputController;
 
-  public get pressedKeys(): Record<string, boolean> {
-    return this.inputController.pressedKeys;
-  }
-
-  // If you want to keep "keysDownThisFrame" as a record:
-  public get keysDownThisFrame(): Record<string, boolean> {
-    return this.inputController.keysDownThisFrame;
-  }
-
-  public get keysUpThisFrame(): Record<string, boolean> {
-    return this.inputController.keysUpThisFrame;
-  }
-
-  constructor(html: HTMLElement, scene: Scene) {
+  constructor(
+    html: HTMLElement,
+    scene: Scene,
+    engineOptions?: EngineOptions,
+    renderOptions?: RenderOptions
+  ) {
     this.html = html;
     this.currentScene = scene;
     this.inputController = new InputController();
+    this.engineOptions = engineOptions ?? defaultEngineOptions;
+    this.renderOptions = renderOptions ?? defaultRenderOptions;
 
     // Initialize all game objects
     for (const gameObject of this.currentScene.gameObjects) {
@@ -53,7 +52,9 @@ export class GameController {
     this.physicsController = new PhysicsController(
       this.html,
       Object.values(this.gameObjects),
-      this
+      this,
+      this.engineOptions,
+      this.renderOptions
     );
 
     for (const uuid in this.gameObjects) {

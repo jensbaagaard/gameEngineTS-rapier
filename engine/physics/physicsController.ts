@@ -1,9 +1,9 @@
 import Matter from "matter-js";
 import type { GameObject } from "../Gameobject/GameObject";
 import { KeyPair } from "./keyPair";
-import Debug from "../Debug/Debug";
 import type { GameController } from "../gameController";
-
+import type { RenderOptions } from "./RenderOptions";
+import type { EngineOptions } from "./EngineOptions";
 export class PhysicsController {
   private engine: Matter.Engine;
   private render: Matter.Render;
@@ -13,20 +13,16 @@ export class PhysicsController {
   constructor(
     html: HTMLElement,
     gameObjects: GameObject[],
-    game: GameController
+    game: GameController,
+    engineOptions: EngineOptions,
+    renderOptions: RenderOptions
   ) {
-    this.engine = Matter.Engine.create({
-      gravity: { x: 0, y: 1 },
-    });
+    this.engine = Matter.Engine.create(engineOptions);
 
     this.render = Matter.Render.create({
       element: html,
       engine: this.engine,
-      options: {
-        width: 800,
-        height: 600,
-        wireframes: false,
-      },
+      options: renderOptions,
     });
 
     gameObjects.forEach((obj) => {

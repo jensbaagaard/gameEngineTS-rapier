@@ -1,10 +1,11 @@
 import { Bodies, Body } from "matter-js";
 import { GameObject } from "../../engine/Gameobject/GameObject";
-import Debug from "../../engine/Debug/Debug";
+import type { CollitionCounter } from "./collitionCounter";
 
 export class Box extends GameObject {
   public tag: string = "box";
   public timeAlive: number = 0;
+  public collitionCounter: CollitionCounter | undefined;
   public rigidbody: Matter.Body = Bodies.rectangle(
     this.startPosition.x,
     this.startPosition.y,
@@ -12,7 +13,10 @@ export class Box extends GameObject {
     10
   );
 
-  public start(): void {}
+  public start(): void {
+    this.collitionCounter =
+      this.getComponentByTag<CollitionCounter>("counter")[0];
+  }
 
   public update(): void {
     this.timeAlive += this.game.deltaTime / 1000;
@@ -20,8 +24,8 @@ export class Box extends GameObject {
     if (this.rigidbody.position.y > 10000 || this.timeAlive > 20)
       this.destroy(this);
   }
-  public onCollition(targetId: string): void {
-    Debug.log(this.getComponentById(targetId))
+  public onCollition(): void {
+    this.collitionCounter?.count();
   }
 
   public onDestroy(): void {

@@ -17,7 +17,6 @@ export class Player extends GameObject {
 
   public update(): void {
     this.movePlayer();
-
     if (this.rigidbody.position.y > 10000) this.destroy(this);
   }
 
