@@ -1,0 +1,21 @@
+{
+  "name": "dev",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "bun --hot build index.html --outdir ./build"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@types/matter-js": "^0.19.8",
+    "@types/uuid": "^10.0.0",
+    "matter-js": "^0.20.0",
+    "uuid": "^11.1.0"
+  }
+}
