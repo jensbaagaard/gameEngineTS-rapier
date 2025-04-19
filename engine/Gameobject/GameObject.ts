@@ -52,6 +52,10 @@ export class GameObject {
     return this.game.gameObjects[id];
   }
 
+  public getComponentByTag(tag:string):GameObject[] | undefined {
+    
+  }
+
   constructor(id: string, gameController: GameController, position?: Position) {
     this.id = id;
     this.game = gameController;

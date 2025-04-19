@@ -86,8 +86,8 @@ export class GameController {
   public destroyGameobject(gameObject: GameObject): void {
     const id = gameObject.id;
     if (this.gameObjects[id]) {
-      this.gameObjects[id].onDestroy();
-      this.physicsController?.removeGameObject(this.gameObjects[id]);
+      this.gameObjects[id]!.onDestroy();
+      this.physicsController?.removeGameObject(this.gameObjects[id]!);
       delete this.gameObjects[id];
     }
   }

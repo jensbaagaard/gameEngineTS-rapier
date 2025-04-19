@@ -1,5 +1,6 @@
-import { Bodies } from "matter-js";
+import { Bodies, Body } from "matter-js";
 import { GameObject } from "../../engine/Gameobject/GameObject";
+import Debug from "../../engine/Debug/Debug";
 
 export class Box extends GameObject {
   public tag: string = "box";
@@ -7,8 +8,8 @@ export class Box extends GameObject {
   public rigidbody: Matter.Body = Bodies.rectangle(
     this.startPosition.x,
     this.startPosition.y,
-    50,
-    50
+    10,
+    10
   );
 
   public start(): void {}
@@ -18,6 +19,9 @@ export class Box extends GameObject {
 
     if (this.rigidbody.position.y > 10000 || this.timeAlive > 20)
       this.destroy(this);
+  }
+  public onCollition(targetId: string): void {
+    Debug.log(this.getComponentById(targetId))
   }
 
   public onDestroy(): void {
