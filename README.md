@@ -1,15 +1,27 @@
-# dev
-
-To install dependencies:
+# gameEngineTS
 
 ```bash
 bun install
 ```
 
-To run:
+## Dedicated server
+
+Runs the simulation on the server. Players connect and the game outlives any of them.
 
 ```bash
-bun run index.ts
+bun start
 ```
 
-This project was created using `bun init` in bun v1.2.10. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+Open http://localhost:3000
+
+## Hosted by a player
+
+The server only relays. One player opens `/?host` and runs the simulation in their browser; everyone else opens `/`. No ports to open.
+
+```bash
+bun relay
+```
+
+## Single player
+
+Any server, or just `bun index.html`, then open `/?local`.

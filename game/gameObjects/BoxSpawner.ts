@@ -2,14 +2,13 @@ import { GameObject } from "../../engine/Gameobject/GameObject";
 import { Box } from "./Box";
 
 export class BoxSpawner extends GameObject {
-  public start(): void {}
-
   public update(): void {
-    if (this.getKeyDown(["f"])) {
-      for (let index = 0; index < 10; index++) {
-        this.game.instantiateGameObject(Box, { x: Math.random() * 800, y: 0 });
-        
-      }
-    }
+    if (!Object.values(this.game.inputs).some((input) => input.pressed("f")))
+      return;
+    for (let i = 0; i < 10; i++)
+      this.game.instantiate([
+        Box,
+        { x: Math.random() * 10 - 5, y: 5, z: Math.random() * 10 - 5 },
+      ]);
   }
 }

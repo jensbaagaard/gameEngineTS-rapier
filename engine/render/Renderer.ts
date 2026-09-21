@@ -1,24 +1,49 @@
-import type { World } from "@dimforge/rapier2d-compat";
-import type { RenderOptions } from "./RenderOptions";
+import { PerspectiveCamera, Scene, WebGLRenderer, type Object3D } from "three";
+import type { SnapshotObject } from "../interfaces/Protocol";
+import type { View } from "../interfaces/View";
 
 export class Renderer {
-  private ctx: CanvasRenderingContext2D;
+  public scene = new Scene();
+  public camera = new PerspectiveCamera(60);
+  public meshes = new Map<string, Object3D>();
+  private renderer = new WebGLRenderer({ antialias: true });
 
-  constructor(html: HTMLElement, options: RenderOptions) {
-    const canvas = Object.assign(document.createElement("canvas"), options);
-    this.ctx = html.appendChild(canvas).getContext("2d")!;
+  constructor(
+    html: HTMLElement,
+    private view: View
+  ) {
+    this.renderer.setPixelRatio(devicePixelRatio);
+    html.appendChild(this.renderer.domElement);
+    this.resize();
+    addEventListener("resize", () => this.resize());
+    view.setup?.(this);
   }
 
-  public draw(world: World): void {
-    const { vertices, colors } = world.debugRender();
-    this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
-    for (let i = 0; i < vertices.length; i += 4) {
-      const c = i * 2;
-      this.ctx.strokeStyle = `rgb(${colors[c]! * 255} ${colors[c + 1]! * 255} ${colors[c + 2]! * 255} / ${colors[c + 3]})`;
-      this.ctx.beginPath();
-      this.ctx.moveTo(vertices[i]!, vertices[i + 1]!);
-      this.ctx.lineTo(vertices[i + 2]!, vertices[i + 3]!);
-      this.ctx.stroke();
+  private resize(): void {
+    this.renderer.setSize(innerWidth, innerHeight);
+    this.camera.aspect = innerWidth / innerHeight;
+    this.camera.updateProjectionMatrix();
+  }
+
+  public draw(objects: SnapshotObject[], playerId?: string): void {
+    const stale = new Set(this.meshes.keys());
+    for (const obj of objects) {
+      let mesh = this.meshes.get(obj.id);
+      if (!mesh) {
+        mesh = this.view.visuals[obj.tag]?.();
+        if (!mesh) continue;
+        this.scene.add(mesh);
+        this.meshes.set(obj.id, mesh);
+      }
+      stale.delete(obj.id);
+      mesh.position.copy(obj.position);
+      mesh.quaternion.copy(obj.rotation);
     }
+    for (const id of stale) {
+      this.meshes.get(id)!.removeFromParent();
+      this.meshes.delete(id);
+    }
+    this.view.update?.(this, objects, playerId);
+    this.renderer.render(this.scene, this.camera);
   }
 }

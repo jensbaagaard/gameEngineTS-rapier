@@ -3,25 +3,23 @@ import {
   EventQueue,
   init,
   World,
-} from "@dimforge/rapier2d-compat";
+} from "@dimforge/rapier3d-compat";
 import type { GameObject } from "../Gameobject/GameObject";
-import type { GameController } from "../gameController";
-import type { EngineOptions } from "./EngineOptions";
+import type { Position } from "../interfaces/Scene";
+import type { Simulation } from "../Simulation";
 
 await init();
 
 export class PhysicsController {
-  public world: World;
+  private world: World;
   private events = new EventQueue(true);
   private accumulator = 0;
 
   constructor(
-    private game: GameController,
-    options: EngineOptions
+    private game: Simulation,
+    gravity: Position = { x: 0, y: -9.81, z: 0 }
   ) {
-    this.world = new World(options.gravity);
-    this.world.lengthUnit = options.lengthUnit;
-    Object.values(game.gameObjects).forEach((obj) => this.addGameObject(obj));
+    this.world = new World(gravity);
   }
 
   public step(deltaMs: number): void {
@@ -36,10 +34,10 @@ export class PhysicsController {
 
   public addGameObject(obj: GameObject): void {
     if (!obj.body || !obj.collider) return;
-    const body = obj.body
-      .setTranslation(obj.startPosition.x, obj.startPosition.y)
-      .setUserData(obj.id);
-    obj.rigidbody = this.world.createRigidBody(body);
+    const { x, y, z } = obj.startPosition;
+    obj.rigidbody = this.world.createRigidBody(
+      obj.body.setTranslation(x, y, z).setUserData(obj.id)
+    );
     this.world.createCollider(
       obj.collider.setActiveEvents(ActiveEvents.COLLISION_EVENTS),
       obj.rigidbody
