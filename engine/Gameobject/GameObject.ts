@@ -1,14 +1,19 @@
-import type Matter from "matter-js";
+import type {
+  ColliderDesc,
+  RigidBody,
+  RigidBodyDesc,
+} from "@dimforge/rapier2d-compat";
 import type { GameController } from "../gameController";
 import type { Position } from "../interfaces/Scene";
-import type { Body } from "matter-js";
 
 export class GameObject {
   public id: string;
   public tag: string = "not set";
   public game: GameController;
   public startPosition: Position;
-  public rigidbody?: Matter.Body;
+  public body?: RigidBodyDesc;
+  public collider?: ColliderDesc;
+  public rigidbody?: RigidBody;
 
   public setGame(game: GameController): void {
     this.game = game;
@@ -16,36 +21,22 @@ export class GameObject {
   public start(): void {}
   public update(): void {}
   public onDestroy(): void {}
-  public onCollition(
-    targetId: string,
-    rigidbody: Body,
-    targetRigidBody: Body
-  ): void {}
+  public onCollition(target: GameObject): void {}
 
   public destroy(gameObject: GameObject): void {
     this.game.destroyGameobject(gameObject);
   }
 
-  /**
-   * Check if **all** requested input keys are pressed (currently active).
-   */
   public getInput(input: string[]): boolean {
-    // with a Record, check presence like: !!this.game.pressedKeys[key]
     return input.every((key) => !!this.game.inputController.pressedKeys[key]);
   }
 
-  /**
-   * Check if **all** requested keys were pressed **this frame**.
-   */
   public getKeyDown(input: string[]): boolean {
     return input.every(
       (key) => !!this.game.inputController.keysDownThisFrame[key]
     );
   }
 
-  /**
-   * Check if **all** requested keys were released **this frame**.
-   */
   public getKeyUp(input: string[]): boolean {
     return input.every(
       (key) => !!this.game.inputController.keysUpThisFrame[key]

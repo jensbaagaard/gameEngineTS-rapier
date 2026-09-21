@@ -1,4 +1,8 @@
-import { Bodies, Body } from "matter-js";
+import {
+  ColliderDesc,
+  RigidBodyDesc,
+  type RigidBody,
+} from "@dimforge/rapier2d-compat";
 import { GameObject } from "../../engine/Gameobject/GameObject";
 import Debug from "../../engine/Debug/Debug";
 
@@ -6,47 +10,39 @@ export class Player extends GameObject {
   public timeAlive: number = 0;
   public jumpCooldown: number = 1000;
   public currentJumpCooldown: number = 0;
-
-  public rigidbody: Matter.Body = Bodies.rectangle(
-    this.startPosition.x,
-    this.startPosition.y,
-    100,
-    100,
-    { inertia: Infinity, friction: 0, frictionAir: 0.1, mass: 10 }
-  );
+  public body = RigidBodyDesc.dynamic().lockRotations().setLinearDamping(6.7);
+  public collider = ColliderDesc.cuboid(50, 50).setFriction(0).setMass(10);
+  declare public rigidbody: RigidBody;
 
   public update(): void {
     this.movePlayer();
-    if (this.rigidbody.position.y > 10000) this.destroy(this);
+    if (this.rigidbody.translation().y > 10000) this.destroy(this);
   }
 
-  public onCollition(targetId: string): void {
-    const gameObject = this.game.gameObjects[targetId]!;
-
-    if (gameObject.tag === "box") this.destroy(gameObject);
+  public onCollition(target: GameObject): void {
+    if (target.tag === "box") this.destroy(target);
   }
 
   private movePlayer() {
     if (this.currentJumpCooldown > 0)
       this.currentJumpCooldown -= this.game.deltaTime;
 
+    this.rigidbody.resetForces(true);
+
     if (this.getInput(["w"]) && this.currentJumpCooldown <= 0) {
       Debug.log("jump");
-      this.rigidbody.force = { x: 0, y: -0.3 };
+      this.rigidbody.applyImpulse({ x: 0, y: -5000 }, true);
       this.currentJumpCooldown = this.jumpCooldown;
     }
 
-    if (this.getInput(["a"])) {
-      this.rigidbody.force = { x: -0.01, y: 0 };
-    }
+    if (this.getInput(["a"]))
+      this.rigidbody.addForce({ x: -10000, y: 0 }, true);
 
     if (this.getInput(["s"]) && this.currentJumpCooldown <= 0) {
-      this.rigidbody.force = { x: 0, y: 0.1 };
+      this.rigidbody.applyImpulse({ x: 0, y: 1667 }, true);
       this.currentJumpCooldown = this.jumpCooldown;
     }
 
-    if (this.getInput(["d"])) {
-      this.rigidbody.force = { x: 0.01, y: 0 };
-    }
+    if (this.getInput(["d"])) this.rigidbody.addForce({ x: 10000, y: 0 }, true);
   }
 }

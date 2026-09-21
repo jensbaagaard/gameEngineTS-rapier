@@ -23,10 +23,6 @@ export class InputController {
     });
   }
 
-  /**
-   * Update the current frame's input state.
-   * Should be called exactly once per game loop.
-   */
   public updateInputState(): void {
     this.keysDownThisFrame = { ...this.pendingKeyDowns };
     for (const key in this.pendingKeyDowns) {

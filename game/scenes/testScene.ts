@@ -9,7 +9,7 @@ export const testScene: Scene = {
   gameObjects: [
     BoxSpawner,
     [Box, { x: 50, y: 50 }],
-    Ground,
+    [Ground, { x: 400, y: 610 }],
     Player,
     CollitionCounter,
   ],

@@ -1,69 +1,66 @@
-import Matter from "matter-js";
+import {
+  ActiveEvents,
+  EventQueue,
+  init,
+  World,
+} from "@dimforge/rapier2d-compat";
 import type { GameObject } from "../Gameobject/GameObject";
-import { KeyPair } from "./keyPair";
 import type { GameController } from "../gameController";
-import type { RenderOptions } from "./RenderOptions";
 import type { EngineOptions } from "./EngineOptions";
+
+await init();
+
 export class PhysicsController {
-  private engine: Matter.Engine;
-  private render: Matter.Render;
-  private runner: Matter.Runner;
-  public keyPair: KeyPair<number, string> = new KeyPair();
+  public world: World;
+  private events = new EventQueue(true);
+  private accumulator = 0;
 
   constructor(
-    html: HTMLElement,
-    gameObjects: GameObject[],
-    game: GameController,
-    engineOptions: EngineOptions,
-    renderOptions: RenderOptions
+    private game: GameController,
+    options: EngineOptions
   ) {
-    this.engine = Matter.Engine.create(engineOptions);
-
-    this.render = Matter.Render.create({
-      element: html,
-      engine: this.engine,
-      options: renderOptions,
-    });
-
-    gameObjects.forEach((obj) => {
-      if (!obj.rigidbody) return;
-      this.keyPair.addStore(obj.rigidbody.id, obj.id);
-      Matter.Composite.add(this.engine.world, obj.rigidbody);
-    });
-
-    Matter.Render.run(this.render);
-
-    this.runner = Matter.Runner.create();
-    Matter.Runner.run(this.runner, this.engine);
-
-    Matter.Events.on(this.engine, "collisionStart", (event) => {
-      const pairs = event.pairs;
-      pairs.forEach((pair) => {
-        const { bodyA, bodyB } = pair;
-        game.gameObjects[this.keyPair.keyA[bodyA.id] as string]?.onCollition(
-          this.keyPair.keyA[bodyB.id] as string,
-          bodyA,
-          bodyB
-        );
-        game.gameObjects[this.keyPair.keyA[bodyB.id] as string]?.onCollition(
-          this.keyPair.keyA[bodyA.id] as string,
-          bodyB,
-          bodyA
-        );
-      });
-    });
+    this.world = new World(options.gravity);
+    this.world.lengthUnit = options.lengthUnit;
+    Object.values(game.gameObjects).forEach((obj) => this.addGameObject(obj));
   }
 
-  public addGameObject(obj: GameObject) {
-    if (!obj.rigidbody) return;
-
-    this.keyPair.addStore(obj.rigidbody.id, obj.id);
-    Matter.Composite.add(this.engine.world, obj.rigidbody);
+  public step(deltaMs: number): void {
+    const stepMs = this.world.timestep * 1000;
+    this.accumulator = Math.min(this.accumulator + deltaMs, 100);
+    while (this.accumulator >= stepMs) {
+      this.world.step(this.events);
+      this.events.drainCollisionEvents(this.onCollision);
+      this.accumulator -= stepMs;
+    }
   }
 
-  public removeGameObject(obj: GameObject) {
-    if (!obj.rigidbody) return;
-    this.keyPair.removeWithKeyA(obj.rigidbody.id);
-    Matter.Composite.remove(this.engine.world, obj.rigidbody);
+  public addGameObject(obj: GameObject): void {
+    if (!obj.body || !obj.collider) return;
+    const body = obj.body
+      .setTranslation(obj.startPosition.x, obj.startPosition.y)
+      .setUserData(obj.id);
+    obj.rigidbody = this.world.createRigidBody(body);
+    this.world.createCollider(
+      obj.collider.setActiveEvents(ActiveEvents.COLLISION_EVENTS),
+      obj.rigidbody
+    );
+  }
+
+  public removeGameObject(obj: GameObject): void {
+    if (obj.rigidbody) this.world.removeRigidBody(obj.rigidbody);
+  }
+
+  private onCollision = (a: number, b: number, started: boolean) => {
+    const objA = this.gameObjectOf(a);
+    const objB = this.gameObjectOf(b);
+    if (!started || !objA || !objB) return;
+    objA.onCollition(objB);
+    this.game.gameObjects[objB.id]?.onCollition(objA);
+  };
+
+  private gameObjectOf(handle: number): GameObject | undefined {
+    return this.game.gameObjects[
+      this.world.getCollider(handle)?.parent()?.userData as string
+    ];
   }
 }
