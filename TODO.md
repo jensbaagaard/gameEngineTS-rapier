@@ -1,8 +1,8 @@
 # TODO
 
-Most of this list is what the engine is missing before Definitely Safe (our mine-sweeper game) can move onto it. We want the game on the engine so we can build tooling, starting with a level editor, on one standard way of describing scenes.
+The goal is an engine that can run Definitely Safe, our mine-sweeper game, without bloating it. The engine only gains what any game would need, and everything specific to Definitely Safe stays in the game. With the game on the engine, we can build tooling on top of it, starting with a level editor.
 
-Scenes come first. The level editor needs nothing else, and the scene work can be proven against the game before anything else moves. Most of the simulation and networking pieces already exist, with tests, inside Definitely Safe.
+Scenes come first: the level editor needs nothing else, and they can be proven against the game before anything else moves. Most of the simulation and networking pieces already exist, with tests, inside Definitely Safe.
 
 ## Scenes and the level editor
 
