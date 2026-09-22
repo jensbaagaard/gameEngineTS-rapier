@@ -6,19 +6,16 @@ import {
 } from "@dimforge/rapier3d-compat";
 import type { GameObject } from "../Gameobject/GameObject";
 import type { Position } from "../interfaces/Scene";
-import type { Simulation } from "../Simulation";
 
 await init();
 
 export class PhysicsController {
   private world: World;
   private events = new EventQueue(true);
+  private owners = new Map<number, GameObject>();
   private accumulator = 0;
 
-  constructor(
-    private game: Simulation,
-    gravity: Position = { x: 0, y: -9.81, z: 0 }
-  ) {
+  constructor(gravity: Position = { x: 0, y: -9.81, z: 0 }) {
     this.world = new World(gravity);
   }
 
@@ -33,32 +30,33 @@ export class PhysicsController {
   }
 
   public addGameObject(obj: GameObject): void {
-    if (!obj.body || !obj.collider) return;
     const { x, y, z } = obj.startPosition;
-    obj.rigidbody = this.world.createRigidBody(
-      obj.body.setTranslation(x, y, z).setUserData(obj.id)
-    );
-    this.world.createCollider(
+    if (obj.body)
+      obj.rigidbody = this.world.createRigidBody(
+        obj.body.setTranslation(x, y, z)
+      );
+    if (!obj.collider) return;
+    if (!obj.rigidbody) obj.collider.setTranslation(x, y, z);
+    obj.hitbox = this.world.createCollider(
       obj.collider.setActiveEvents(ActiveEvents.COLLISION_EVENTS),
       obj.rigidbody
     );
+    this.owners.set(obj.hitbox.handle, obj);
   }
 
   public removeGameObject(obj: GameObject): void {
+    if (obj.hitbox) {
+      this.owners.delete(obj.hitbox.handle);
+      this.world.removeCollider(obj.hitbox, false);
+    }
     if (obj.rigidbody) this.world.removeRigidBody(obj.rigidbody);
   }
 
   private onCollision = (a: number, b: number, started: boolean) => {
-    const objA = this.gameObjectOf(a);
-    const objB = this.gameObjectOf(b);
+    const objA = this.owners.get(a);
+    const objB = this.owners.get(b);
     if (!started || !objA || !objB) return;
     objA.onCollition(objB);
-    this.game.gameObjects[objB.id]?.onCollition(objA);
+    this.owners.get(b)?.onCollition(objA);
   };
-
-  private gameObjectOf(handle: number): GameObject | undefined {
-    return this.game.gameObjects[
-      this.world.getCollider(handle)?.parent()?.userData as string
-    ];
-  }
 }

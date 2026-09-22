@@ -18,7 +18,7 @@ export class Simulation {
   private lastTick = 0;
 
   constructor(private scene: Scene) {
-    this.physics = new PhysicsController(this, scene.gravity);
+    this.physics = new PhysicsController(scene.gravity);
     for (const entry of scene.gameObjects) this.spawn(entry);
   }
 
@@ -81,14 +81,14 @@ export class Simulation {
 
   private snapshot(): Snapshot {
     const objects: SnapshotObject[] = [];
-    for (const { id, tag, owner, rigidbody } of Object.values(this.gameObjects))
-      if (rigidbody)
+    for (const { id, tag, owner, transform } of Object.values(this.gameObjects))
+      if (transform)
         objects.push({
           id,
           tag,
           owner,
-          position: rigidbody.translation(),
-          rotation: rigidbody.rotation(),
+          position: transform.translation(),
+          rotation: transform.rotation(),
         });
     return { type: "snapshot", objects };
   }

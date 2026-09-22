@@ -1,4 +1,5 @@
 import type {
+  Collider,
   ColliderDesc,
   RigidBody,
   RigidBodyDesc,
@@ -16,6 +17,7 @@ export class GameObject {
   public body?: RigidBodyDesc;
   public collider?: ColliderDesc;
   public rigidbody?: RigidBody;
+  public hitbox?: Collider;
 
   constructor(
     public game: Simulation,
@@ -30,6 +32,10 @@ export class GameObject {
 
   public get input(): Input {
     return (this.owner && this.game.inputs[this.owner]) || idle;
+  }
+
+  public get transform(): RigidBody | Collider | undefined {
+    return this.rigidbody ?? this.hitbox;
   }
 
   public getComponentByTag<T extends GameObject>(tag: string): T[] {
