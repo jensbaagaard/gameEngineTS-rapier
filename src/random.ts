@@ -56,16 +56,6 @@ export class Rng {
     return lo + this.nextInt(hi - lo + 1);
   }
 
-  shuffle<T>(arr: T[]): T[] {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = this.nextInt(i + 1);
-      const t = arr[i]!;
-      arr[i] = arr[j]!;
-      arr[j] = t;
-    }
-    return arr;
-  }
-
   state(): [number, number, number, number] {
     return [this.s0, this.s1, this.s2, this.s3];
   }

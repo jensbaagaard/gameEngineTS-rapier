@@ -22,8 +22,8 @@ describe('scene documents', () => {
     );
     expect(reversed.expand(scenes.workshop)).toEqual(registry.expand(scenes.workshop));
     const first = registry.expand(scenes.workshop);
-    first[0]!.settings.color = 'changed';
-    expect(registry.expand(scenes.workshop)[0]!.settings.color).not.toBe('changed');
+    Object.assign(first[0]!.settings, { color: 'changed' });
+    expect(registry.expand(scenes.workshop)[0]!.settings).not.toHaveProperty('color', 'changed');
   });
   it.each([
     (s: any) => {
@@ -69,7 +69,7 @@ describe('scene documents', () => {
   });
   it('rejects invalid ids from a generator before namespacing them', () => {
     const registry = new SceneRegistry(
-      { box: { settings: object({}), sharing: 'local' } },
+      { box: object({}) },
       {
         boxes: { settings: object({}), generate: () => [{ id: '', type: 'box', settings: {} }] },
       },

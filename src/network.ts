@@ -9,12 +9,9 @@ export class CommandQueue<C> {
     readonly capacity: number,
     readonly repeatTicks: number,
   ) {
-    if (
-      !Number.isSafeInteger(capacity) ||
-      capacity < 1 ||
-      !Number.isSafeInteger(repeatTicks) ||
-      repeatTicks < 0
-    )
+    if (!Number.isSafeInteger(capacity) || capacity < 1)
+      throw new Error('Invalid command queue configuration');
+    if (!Number.isSafeInteger(repeatTicks) || repeatTicks < 0)
       throw new Error('Invalid command queue configuration');
   }
 
@@ -32,14 +29,17 @@ export class CommandQueue<C> {
       this.applied = next.sequence;
       this.last = next.command;
       this.repeated = 0;
-    } else if (this.last === undefined || this.repeated++ >= this.repeatTicks)
-      return idle(this.last);
-    return structuredClone(this.last!);
+      return structuredClone(next.command);
+    }
+    if (this.last === undefined || this.repeated >= this.repeatTicks) return idle(this.last);
+    this.repeated++;
+    return structuredClone(this.last);
   }
 
   get length(): number {
     return this.queue.length;
   }
+
   clear(): void {
     this.queue = [];
     this.last = undefined;
@@ -62,15 +62,11 @@ export class TickInbox<T extends TickMessage> {
   }
 
   push(message: T): boolean {
-    if (
-      !Number.isSafeInteger(message.epoch) ||
-      message.epoch < 0 ||
-      !Number.isSafeInteger(message.tick) ||
-      message.tick < 0
-    )
+    if (!Number.isSafeInteger(message.epoch) || message.epoch < 0)
       throw new Error('Invalid message clock');
-    if (message.epoch < this.epoch || (message.epoch === this.epoch && message.tick <= this.tick))
-      return false;
+    if (!Number.isSafeInteger(message.tick) || message.tick < 0)
+      throw new Error('Invalid message clock');
+    if (this.isStale(message)) return false;
     if (this.queue.length >= this.capacity)
       throw new Error('Snapshot backlog exceeded; reconnect to synchronize');
     this.epoch = message.epoch;
@@ -79,14 +75,21 @@ export class TickInbox<T extends TickMessage> {
     return true;
   }
 
+  private isStale(message: T): boolean {
+    if (message.epoch !== this.epoch) return message.epoch < this.epoch;
+    return message.tick <= this.tick;
+  }
+
   get length(): number {
     return this.queue.length;
   }
+
   drain(): T[] {
     const result = this.queue;
     this.queue = [];
     return result;
   }
+
   clear(): void {
     this.queue = [];
     this.epoch = -1;

@@ -9,34 +9,29 @@ export interface Patch {
 
 export function canonical(value: Json): string {
   assertJson(value);
-  const encode = (item: Json): string => {
-    if (Array.isArray(item)) return '[' + item.map(encode).join(',') + ']';
-    if (item !== null && typeof item === 'object')
-      return (
-        '{' +
-        Object.keys(item)
-          .sort()
-          .map((key) => JSON.stringify(key) + ':' + encode(item[key]!))
-          .join(',') +
-        '}'
-      );
-    return JSON.stringify(item);
-  };
   return encode(value);
 }
 
-export class Replicator {
+function encode(item: Json): string {
+  if (Array.isArray(item)) return '[' + item.map(encode).join(',') + ']';
+  if (item === null || typeof item !== 'object') return JSON.stringify(item);
+  const fields = Object.keys(item)
+    .sort()
+    .map((key) => JSON.stringify(key) + ':' + encode(item[key]!));
+  return '{' + fields.join(',') + '}';
+}
+
+export class Replicator<S extends Properties = Properties> {
   private previous: Map<string, string> | undefined;
   private revision = 0;
 
-  encode(publicState: Properties): Patch {
+  encode(publicState: S): Patch {
     const next = new Map(
       Object.entries(publicState).map(([key, value]) => [key, canonical(value)]),
     );
-    const set: Properties = Object.fromEntries(
-      [...next]
-        .filter(([key, value]) => this.previous?.get(key) !== value)
-        .map(([key]) => [key, structuredClone(publicState[key]!)]),
+    const changed = [...next].filter(([key, encoded]) => this.previous?.get(key) !== encoded);
+    const set = Object.fromEntries(
+      changed.map(([key]) => [key, structuredClone(publicState[key]!)]),
     );
     const remove = [...(this.previous?.keys() ?? [])].filter((key) => !next.has(key));
     const patch = {
@@ -55,8 +50,8 @@ export class Replicator {
   }
 }
 
-export class Replica {
-  state: Properties = {};
+export class Replica<S extends Properties = Properties> {
+  state = {} as S;
   revision = 0;
 
   apply(patch: Patch): boolean {
@@ -65,16 +60,17 @@ export class Replica {
     if (patch.revision <= this.revision) return false;
     if (patch.base !== null && patch.base !== this.revision)
       throw new Error('Missing state baseline; reconnect to synchronize');
-    const next = patch.base === null ? {} : { ...this.state };
-    for (const key of patch.remove) delete (next as Properties)[key];
-    for (const [key, value] of Object.entries(patch.set))
+    const next: Properties = patch.base === null ? {} : { ...this.state };
+    for (const key of patch.remove) delete next[key];
+    for (const [key, value] of Object.entries(patch.set)) {
       Object.defineProperty(next, key, {
         value: structuredClone(value),
         enumerable: true,
         configurable: true,
         writable: true,
       });
-    this.state = next;
+    }
+    this.state = next as S;
     this.revision = patch.revision;
     return true;
   }
@@ -104,14 +100,11 @@ export class Prediction<S, C> {
   }
 
   correct(state: S, acknowledged: number): void {
-    if (
-      !Number.isSafeInteger(acknowledged) ||
-      acknowledged < this.acknowledged ||
-      acknowledged > this.sequence
-    )
+    if (!Number.isSafeInteger(acknowledged)) throw new Error('Invalid command acknowledgement');
+    if (acknowledged < this.acknowledged || acknowledged > this.sequence)
       throw new Error('Invalid command acknowledgement');
     this.acknowledged = acknowledged;
-    this.pending = this.pending.filter((p) => p.sequence > acknowledged);
+    this.pending = this.pending.filter((entry) => entry.sequence > acknowledged);
     this.state = structuredClone(state);
     for (const entry of this.pending) this.simulate(this.state, entry.command);
   }

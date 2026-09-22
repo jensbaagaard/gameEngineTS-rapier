@@ -12,7 +12,7 @@ This is a foundation replacement, **not completion of every TODO**. It adds sepa
 
 - `src/` is the reusable engine. The root entry point is headless and runtime-neutral; physics and browser modules are optional imports.
 - `game/` defines workshop settings, generators, movement, physics construction, public state, wire validation and rooms. Those choices are intentionally not promoted to generic engine policy.
-- `main.ts` composes local play, room play, prediction, interpolation, scene preview and export.
+- `main.ts` reads the URL mode and wires the page to `game/local.ts` (in-page simulation) or `game/online.ts` (socket, prediction, interpolation). Scene preview and export need neither.
 - `examples/counter.ts` verifies that simulation/replay are useful without the workshop or physics.
 - `tests/` covers the reusable contracts and real server/browser integration.
 
@@ -23,7 +23,7 @@ This boundary is provisional: extract more only when the next game demonstrates 
 1. `src/schema.ts`, `src/scene.ts`, `game/scene.ts` and the two JSON scenes: validation, ids, deterministic expansion, baking and editor-readable settings.
 2. `src/simulation.ts`, `src/session.ts`, `src/clock.ts`, `src/physics.ts`: execution order, lifetime ownership, scene transitions and fixed physics steps.
 3. `src/network.ts`, `src/replication.ts`, `game/server.ts`: bounded input, sequence/epoch handling, explicit public projection and full/delta baselines.
-4. `main.ts`, `src/browser.ts`, `game/view.ts`: input, prediction, rendering independent of packets and cleanup.
+4. `main.ts`, `game/local.ts`, `game/online.ts`, `src/browser.ts`, `game/view.ts`: input, prediction, rendering independent of packets and cleanup.
 5. `tests/` and `TODO.md`: distinguish what is demonstrated from what still requires game integration or platform evidence.
 
 ## Breaking changes
@@ -47,7 +47,7 @@ Determinism is conditional on game code, complete state, identical content and a
 
 Queue bounds have semantics, not just sizes. Dropping stale movement may be acceptable; dropping a purchase or dig is not. The command helper explicitly bounds held intent. Likewise, keeping every accepted snapshot avoids the old class of disappearing events, but durable exactly-once receipts require acknowledgements/resume semantics that are not implemented here.
 
-Scene files are public content, including their seeds. `sharing: 'server'` cannot make a seed secret if the file itself is bundled into the browser. Privacy comes from server-only construction and explicit projection. This must be tested against the real game's mine-generation logic later.
+Scene files are public content, including their seeds. No per-object flag can make a seed secret if the file itself is bundled into the browser. Privacy comes from server-only construction and explicit projection. This must be tested against the real game's mine-generation logic later.
 
 The example predicts simple movement, not an interacting Rapier world. It uses a kinematic player that pushes boxes; it does not demonstrate collision-constrained first-person movement, multiplayer rollback, ropes in prediction or the game's full renderer/effects. Those TODOs remain open.
 

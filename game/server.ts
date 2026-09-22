@@ -1,4 +1,4 @@
-import { createServer } from 'node:http';
+import { createServer, type Server } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CommandQueue, Replicator, Session, scheduleTicks } from '../src/index.js';
 import { initPhysics } from '../src/physics.js';
@@ -8,16 +8,28 @@ import {
   parseClientMessage,
   CONTENT,
   VERSION,
+  type JoinMessage,
+  type PublicState,
   type ServerMessage,
   type Snapshot,
 } from './protocol.js';
+
+const MAX_PLAYERS = 8;
+const MAX_ROOMS = 64;
+const COMMAND_BACKLOG = 12;
+const REPEAT_TICKS = 3;
+const SCENE_CHANGE_COOLDOWN_MS = 1000;
+const MESSAGES_PER_SECOND = 150;
+const SEND_BUFFER_LIMIT = 1024 * 1024;
+const HEARTBEAT_MS = 30_000;
+const ROOM_NAME = /^[a-zA-Z0-9_-]{1,32}$/;
 
 interface Client {
   socket: WebSocket;
   id: string;
   slot: number;
   commands: CommandQueue<Command>;
-  replicator: Replicator;
+  replicator: Replicator<PublicState>;
 }
 
 class Room {
@@ -31,16 +43,14 @@ class Room {
   constructor(readonly password: string) {}
 
   join(socket: WebSocket): Client {
-    if (this.clients.size >= 8) throw new Error('Room is full');
-    const slots = new Set([...this.clients.values()].map((c) => c.slot));
-    let slot = 0;
-    while (slots.has(slot)) slot++;
-    const client = {
+    if (this.clients.size >= MAX_PLAYERS) throw new Error('Room is full');
+    const slot = this.freeSlot();
+    const client: Client = {
       socket,
       id: `player:${slot}`,
       slot,
-      commands: new CommandQueue<Command>(12, 3),
-      replicator: new Replicator(),
+      commands: new CommandQueue(COMMAND_BACKLOG, REPEAT_TICKS),
+      replicator: new Replicator<PublicState>(),
     };
     this.session.level.join(client.id, slot);
     this.clients.set(socket, client);
@@ -48,20 +58,37 @@ class Room {
     return client;
   }
 
+  private freeSlot(): number {
+    const taken = new Set([...this.clients.values()].map((client) => client.slot));
+    let slot = 0;
+    while (taken.has(slot)) slot++;
+    return slot;
+  }
+
+  welcome(client: Client): ServerMessage {
+    const player = this.session.level.players.get(client.id)!;
+    return {
+      type: 'welcome',
+      version: VERSION,
+      id: client.id,
+      epoch: this.session.epoch,
+      position: { ...player.position },
+    };
+  }
+
   leave(socket: WebSocket): void {
     const client = this.clients.get(socket);
     if (!client) return;
     this.session.level.leave(client.id);
     this.clients.delete(socket);
-    if (!this.clients.size) {
-      this.stop?.();
-      this.stop = undefined;
-      this.emptySince = Date.now();
-    }
+    if (this.clients.size) return;
+    this.stop?.();
+    this.stop = undefined;
+    this.emptySince = Date.now();
   }
 
   change(scene: string): void {
-    if (Date.now() - this.lastChange < 1000)
+    if (Date.now() - this.lastChange < SCENE_CHANGE_COOLDOWN_MS)
       throw new Error('Wait a moment before changing scenes');
     this.lastChange = Date.now();
     this.session.change(scene);
@@ -76,10 +103,12 @@ class Room {
 
   tick(): void {
     const level = this.session.level;
-    const commands = new Map([...this.clients.values()].map((c) => [c.id, c.commands.take(idle)]));
+    const commands = new Map(
+      [...this.clients.values()].map((client) => [client.id, client.commands.take(idle)]),
+    );
     level.step(commands);
     const publicState = level.state();
-    for (const client of this.clients.values())
+    for (const client of this.clients.values()) {
       send(client.socket, {
         type: 'snapshot',
         epoch: this.session.epoch,
@@ -90,6 +119,7 @@ class Room {
         patch: client.replicator.encode(publicState),
         events: this.events,
       });
+    }
     this.events = [];
   }
 
@@ -102,40 +132,70 @@ class Room {
 }
 
 function send(socket: WebSocket, message: ServerMessage): void {
-  if (socket.bufferedAmount > 1024 * 1024) {
+  if (socket.bufferedAmount > SEND_BUFFER_LIMIT) {
     socket.close(1013, 'Client is too slow; reconnect');
     return;
   }
   if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
 }
 
-export async function startServer(port = 3000, host = '127.0.0.1', roomTtlMs = 600_000) {
-  await initPhysics();
-  const rooms = new Map<string, Room>();
+function listen(port: number, host: string): Promise<Server> {
   const http = createServer();
-  await new Promise<void>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     http.once('error', reject);
     http.listen(port, host, () => {
       http.off('error', reject);
-      resolve();
+      resolve(http);
     });
   });
+}
+
+function rateLimiter(perSecond: number): () => boolean {
+  let windowStart = Date.now();
+  let count = 0;
+  return () => {
+    const now = Date.now();
+    if (now - windowStart >= 1000) {
+      count = 0;
+      windowStart = now;
+    }
+    return ++count <= perSecond;
+  };
+}
+
+export async function startServer(port = 3000, host = '127.0.0.1', roomTtlMs = 600_000) {
+  await initPhysics();
+  const rooms = new Map<string, Room>();
+  const http = await listen(port, host);
   const websocket = new WebSocketServer({ server: http, path: '/ws', maxPayload: 4096 });
   const alive = new Set<WebSocket>();
+
+  function admit(message: JoinMessage): Room {
+    if (message.version !== VERSION) throw new Error('Version mismatch; reload');
+    if (message.content !== CONTENT) throw new Error('Scene content mismatch; reload');
+    if (!ROOM_NAME.test(message.room))
+      throw new Error('Use letters, numbers, underscores or hyphens for the room');
+    const existing = rooms.get(message.room);
+    if (!message.create) {
+      if (!existing || existing.password !== message.password)
+        throw new Error('Room or password is incorrect');
+      return existing;
+    }
+    if (existing) throw new Error('Room already exists');
+    if (rooms.size >= MAX_ROOMS) throw new Error('Server is full');
+    const room = new Room(message.password);
+    rooms.set(message.room, room);
+    return room;
+  }
+
   websocket.on('connection', (socket) => {
     alive.add(socket);
     socket.on('pong', () => alive.add(socket));
+    const allow = rateLimiter(MESSAGES_PER_SECOND);
     let room: Room | undefined;
     let client: Client | undefined;
-    let windowStart = Date.now(),
-      count = 0;
     socket.on('message', (raw) => {
-      const now = Date.now();
-      if (now - windowStart >= 1000) {
-        count = 0;
-        windowStart = now;
-      }
-      if (++count > 150) {
+      if (!allow()) {
         socket.close(1008, 'Message limit exceeded');
         return;
       }
@@ -143,39 +203,20 @@ export async function startServer(port = 3000, host = '127.0.0.1', roomTtlMs = 6
         const message = parseClientMessage(String(raw));
         if (message.type === 'join') {
           if (client) throw new Error('Already joined');
-          if (message.version !== VERSION) throw new Error('Version mismatch; reload');
-          if (message.content !== CONTENT) throw new Error('Scene content mismatch; reload');
-          if (!/^[a-zA-Z0-9_-]{1,32}$/.test(message.room))
-            throw new Error('Use letters, numbers, underscores or hyphens for the room');
-          const existing = rooms.get(message.room);
-          if (message.create) {
-            if (existing) throw new Error('Room already exists');
-            if (rooms.size >= 64) throw new Error('Server is full');
-            room = new Room(message.password);
-            rooms.set(message.room, room);
-          } else {
-            if (!existing || existing.password !== message.password)
-              throw new Error('Room or password is incorrect');
-            room = existing;
-          }
+          room = admit(message);
           client = room.join(socket);
-          send(socket, {
-            type: 'welcome',
-            version: VERSION,
-            id: client.id,
-            epoch: room.session.epoch,
-            position: { ...room.session.level.players.get(client.id)!.position },
-          });
-        } else if (!room || !client) throw new Error('Join a room first');
-        else if (message.type === 'command') {
+          send(socket, room.welcome(client));
+        } else if (!room || !client) {
+          throw new Error('Join a room first');
+        } else if (message.type === 'command') {
           if (message.epoch === room.session.epoch)
             client.commands.push(message.sequence, message.command);
-        } else room.change(message.scene);
+        } else {
+          room.change(message.scene);
+        }
       } catch (error) {
-        send(socket, {
-          type: 'error',
-          message: error instanceof Error ? error.message : 'Invalid message',
-        });
+        const text = error instanceof Error ? error.message : 'Invalid message';
+        send(socket, { type: 'error', message: text });
       }
     });
     socket.on('close', () => {
@@ -184,22 +225,24 @@ export async function startServer(port = 3000, host = '127.0.0.1', roomTtlMs = 6
     });
     socket.on('error', () => socket.close());
   });
+
   const heartbeat = setInterval(() => {
     for (const socket of websocket.clients) {
-      if (!alive.delete(socket)) socket.terminate();
-      else socket.ping();
+      if (alive.delete(socket)) socket.ping();
+      else socket.terminate();
     }
-  }, 30_000);
+  }, HEARTBEAT_MS);
   const sweep = setInterval(
     () => {
-      for (const [name, room] of rooms)
-        if (!room.clients.size && Date.now() - room.emptySince >= roomTtlMs) {
-          room.dispose();
-          rooms.delete(name);
-        }
+      for (const [name, room] of rooms) {
+        if (room.clients.size || Date.now() - room.emptySince < roomTtlMs) continue;
+        room.dispose();
+        rooms.delete(name);
+      }
     },
     Math.min(1000, Math.max(10, roomTtlMs / 2)),
   );
+
   const address = http.address();
   return {
     http,

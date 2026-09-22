@@ -12,8 +12,7 @@ This branch updates **only the engine repository**. Checked items are implemente
 - [x] Carry scene-wide settings such as gravity and background; schemas can describe lighting, fog and playable areas.
 - [x] Register named object types explicitly, without import-order side effects.
 - [x] Describe nested settings, units, optional fields, enums and validation limits.
-- [x] Declare local, replicated or server-only sharing as type metadata.
-- [ ] Build the editor's property controls from those schemas and enforce sharing policy in its preview.
+- [ ] Build the editor's property controls from those schemas; decide how server-only objects are declared and enforced in its preview.
 - [x] Preview the workshop without loading physics or starting simulation.
 - [x] Treat spawn points as ordinary objects; leave player-join rules to the game.
 - [x] Mix authored objects and seeded generators; validate generated ids and settings.
@@ -83,7 +82,7 @@ This branch updates **only the engine repository**. Checked items are implemente
 - [x] Expose mouse deltas/buttons and pointer-lock request/release.
 - [x] Free scene geometry/material/direct texture resources, including sharing within a render collection.
 - [x] Check actual WebGPU device availability and use WebGL2 when unavailable; support forcing WebGL2.
-- [ ] Validate native WebGPU, pointer lock, GPU failure paths and touch/browser compatibility across target devices.
+- [ ] Validate native WebGPU, GPU failure paths and touch/browser compatibility across target devices.
 - [ ] Port and visually compare Definitely Safe's renderer, effects and complete resource graph. A lit-box demo does not establish renderer parity.
 
 ## Packaging and game migration

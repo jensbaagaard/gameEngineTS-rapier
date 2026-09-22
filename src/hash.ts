@@ -10,10 +10,6 @@ export class Hasher {
     return this;
   }
 
-  bool(v: boolean): this {
-    return this.byte(v ? 1 : 0);
-  }
-
   bytes(arr: ArrayLike<number>): this {
     for (let i = 0; i < arr.length; i++) this.byte(arr[i]! & 0xff);
     return this;

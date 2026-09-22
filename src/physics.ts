@@ -24,21 +24,24 @@ export class PhysicsWorld {
   }
 
   step(): void {
-    if (this.disposed || this.running)
-      throw new Error(this.disposed ? 'Physics world is disposed' : 'Physics step is reentrant');
+    if (this.disposed) throw new Error('Physics world is disposed');
+    if (this.running) throw new Error('Physics step is reentrant');
     this.running = true;
     try {
       this.world.step(this.events);
-      this.events.drainCollisionEvents((a, b, started) => {
-        const first = this.owners.get(a);
-        const second = this.owners.get(b);
-        if (!first || !second) return;
-        first.onCollision?.(second, started);
-        if (this.owners.has(a) && this.owners.has(b)) second.onCollision?.(first, started);
-      });
+      this.events.drainCollisionEvents((a, b, started) => this.collide(a, b, started));
     } finally {
       this.running = false;
     }
+  }
+
+  private collide(a: number, b: number, started: boolean): void {
+    const first = this.owners.get(a);
+    const second = this.owners.get(b);
+    if (!first || !second) return;
+    first.onCollision?.(second, started);
+    const bothAlive = this.owners.has(a) && this.owners.has(b);
+    if (bothAlive) second.onCollision?.(first, started);
   }
 
   add(

@@ -5,22 +5,26 @@ import {
   number,
   object,
   string,
-  type SceneDocument,
+  type Infer,
   type Schema,
 } from '../src/index.js';
 import workshop from './workshop.json';
 import courtyard from './courtyard.json';
 
 export const vector = object({ x: meters, y: meters, z: meters });
-const positive: Schema = { type: 'number', min: 0.01, max: 100, unit: 'm' };
+export type Vector = Infer<typeof vector>;
+export const PLAYER_SIZE: Vector = { x: 0.9, y: 1.5, z: 0.9 };
+
+const positive = { type: 'number', min: 0.01, max: 100, unit: 'm' } as const satisfies Schema;
 const size = object({ x: positive, y: positive, z: positive });
-const acceleration: Schema = { type: 'number', unit: 'm/s²' };
+const acceleration = { type: 'number', unit: 'm/s²' } as const satisfies Schema;
+const block = object({ position: vector, size, color: string });
 
 export const registry = new SceneRegistry(
   {
-    ground: { sharing: 'local', settings: object({ position: vector, size, color: string }) },
-    box: { sharing: 'replicated', settings: object({ position: vector, size, color: string }) },
-    spawn: { sharing: 'local', settings: object({ position: vector }) },
+    ground: block,
+    box: block,
+    spawn: object({ position: vector }),
   },
   {
     boxes: {
@@ -29,15 +33,12 @@ export const registry = new SceneRegistry(
         spread: { ...number, min: 1, max: 10 },
       }),
       generate(settings, random) {
-        return Array.from({ length: settings.count as number }, (_, i) => ({
+        const scatter = () => (random.range(-100, 100) / 100) * settings.spread;
+        return Array.from({ length: settings.count }, (_, i) => ({
           id: String(i),
           type: 'box',
           settings: {
-            position: {
-              x: (random.range(-100, 100) / 100) * (settings.spread as number),
-              y: 3 + i * 0.7,
-              z: (random.range(-100, 100) / 100) * (settings.spread as number),
-            },
+            position: { x: scatter(), y: 3 + i * 0.7, z: scatter() },
             size: { x: 0.7, y: 0.7, z: 0.7 },
             color: '#f2ad55',
           },
@@ -54,15 +55,11 @@ export const registry = new SceneRegistry(
 export const scenes = {
   workshop: registry.parse(workshop),
   courtyard: registry.parse(courtyard),
-} satisfies Record<string, SceneDocument>;
+};
+export type WorkshopScene = (typeof scenes)[keyof typeof scenes];
+export type WorkshopObject = ReturnType<typeof registry.expand>[number];
 
-export function getScene(id: string): SceneDocument {
+export function getScene(id: string): WorkshopScene {
   if (!Object.hasOwn(scenes, id)) throw new Error(`Unknown scene: ${id}`);
   return scenes[id as keyof typeof scenes];
-}
-
-export interface Vector {
-  x: number;
-  y: number;
-  z: number;
 }

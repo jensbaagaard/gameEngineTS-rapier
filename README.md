@@ -2,6 +2,8 @@
 
 A small TypeScript engine core, with an optional Rapier physics adapter and Three.js browser helpers. Games own their rules, public-state projection, scene factories and transport protocol. The core does not import the example game, Three.js, Rapier, Node or a browser API.
 
+Start with [ARCHITECTURE.md](ARCHITECTURE.md): it has diagrams of the layers, one server tick, one browser frame, scene changes and ownership. This README holds the contracts and limits of each primitive.
+
 This branch replaces the original prototype API. **Definitely Safe / Minesweeper has not been migrated or modified.** Read [REVIEW.md](REVIEW.md) for the decision, breaking changes and review order, and [TODO.md](TODO.md) for the remaining work.
 
 ## Run the workshop
@@ -27,6 +29,7 @@ The blue block is your player; pink blocks are other players. Players push dynam
 ## Check the engine
 
 ```sh
+pnpm format:check
 pnpm typecheck
 pnpm test
 pnpm build
@@ -34,6 +37,8 @@ pnpm demo:headless
 pnpm exec playwright install chromium
 pnpm test:browser
 ```
+
+`pnpm format` applies Prettier (settings in `package.json`). Hand-laid-out scene JSON is excluded.
 
 The browser check exercises local input, repeated scene changes and GPU disposal, physics-free preview, scene export, two-player rooms and scene travel. It also compares full Rapier snapshot fingerprints between Node and Chromium. Captures are written to ignored `evidence/browser/`. CI runs the unit/integration suite on Linux, Windows and macOS and browser checks on Linux.
 
@@ -45,19 +50,19 @@ The browser check exercises local input, repeated scene changes and GPU disposal
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@sneakpeak/engine`         | Scene data, schemas, seeded random streams, phases, entities, clocks, sessions, command queues, replication, prediction, interpolation and replay |
 | `@sneakpeak/engine/physics` | Pinned deterministic Rapier build, explicit body/collider ownership and collision callbacks                                                       |
-| `@sneakpeak/engine/browser` | Keyboard, pointer lock, renderer initialization and render-resource ownership; requires Three.js                                                  |
+| `@sneakpeak/engine/browser` | Keyboard, renderer initialization and render-resource ownership; requires Three.js                                                                |
 
-The package is private and is not published. Build it before consuming it as a local package. `game/`, `main.ts` and `server.ts` are an executable integration example, not part of the exported library. Rooms, authentication policy and wire messages belong there until a second game proves what should be shared.
+The package is private and is not published. Build it before consuming it as a local package. `game/`, `main.ts` and `server.ts` are an executable integration example, not part of the exported library. `main.ts` only wires the page; local play lives in `game/local.ts` and room play in `game/online.ts`. Rooms, authentication policy and wire messages belong there until a second game proves what should be shared.
 
 ### Scenes
 
-`SceneRegistry` takes explicit named object and generator definitions. A `SceneDocument` is versioned JSON containing an id, scene-wide settings, and objects with stable ids, types and settings. A generator additionally has a seed. Schemas describe nested values, limits, optional fields, enums and units for a future editor.
+`SceneRegistry` takes explicit named object and generator definitions. A `SceneDocument` is versioned JSON containing an id, scene-wide settings, and objects with stable ids, types and settings. A generator additionally has a seed. Schemas describe nested values, limits, optional fields, enums and units for a future editor. They also carry types: `validate()` narrows a value to `Infer<typeof schema>`, and `expand()` returns objects whose `settings` are typed by their registered schema, so game code reads settings without casts.
 
 ```ts
 import { SceneRegistry, meters, object } from '@sneakpeak/engine';
 
 const registry = new SceneRegistry({
-  wall: { sharing: 'local', settings: object({ width: { ...meters, min: 0.1 } }) },
+  wall: object({ width: { ...meters, min: 0.1 } }),
 });
 const scene = registry.parse({
   version: 1,
@@ -71,7 +76,7 @@ const json = registry.serialize(scene);
 
 `parse` validates authored data. `expand` also runs and validates generators; child ids are namespaced as `generator-id/child-id`. `bake(scene, id)` replaces one generator with its ordinary objects without changing expanded ids, order or settings. Generators are trusted game code, must be pure apart from the supplied random stream, and must not depend on registration order, wall time or `Math.random()`.
 
-The workshop builds physics and visuals from the same expanded settings, in meters. Gravity, background and ordinary spawn objects are scene data. A scene's `sharing` declaration is metadata, **not an automatic security boundary**. The game must keep server-only objects out of its rendering and public-state projection. Anything in a client-loaded scene, including a generator seed, is public. Secret mine placement must never use a public seed.
+The workshop builds physics and visuals from the same expanded settings, in meters. Gravity, background and ordinary spawn objects are scene data. There is no per-object sharing flag: privacy comes from server-only construction and an explicit public-state projection. Anything in a client-loaded scene, including a generator seed, is public. Secret mine placement must never use a public seed.
 
 ### Simulation and lifetime
 
@@ -83,13 +88,13 @@ The workshop builds physics and visuals from the same expanded settings, in mete
 
 Call `initPhysics()` before constructing a physics world. `PhysicsWorld.add()` can create a body with several colliders or collider-only geometry. Collision callbacks use `onCollision`. Queries, joints and character controllers are available through `.world` and `RAPIER`, without duplicating Rapier's API. Remove managed objects through the adapter so its ownership maps remain correct; do not free the underlying world yourself. Removing objects inside collision callbacks is supported; recursive stepping or disposing the world during a step is rejected.
 
-`RenderObjects` owns added trees and their geometries, materials and directly referenced textures. It preserves resources shared by other trees in the same collection, then frees them when the final owner disappears. Do not share these assets across independently disposed collections. Custom shader uniforms, node graphs, render targets and externally cached assets need their own explicit ownership. `disposeObject` is for an exclusively owned tree. Dispose input listeners, sessions, physics and rendering on shutdown.
+`RenderObjects` owns added trees and their geometries, materials and directly referenced textures. It preserves resources shared by other trees in the same collection, then frees them when the final owner disappears. Do not share these assets across independently disposed collections. Custom shader uniforms, node graphs, render targets and externally cached assets need their own explicit ownership. Dispose input listeners, sessions, physics and rendering on shutdown.
 
 ### Networking contracts
 
 `CommandQueue` expects increasing positive sequence numbers over an ordered connection. Duplicate/older commands are rejected. It consumes at most one queued command per tick; on overflow it drops the oldest queued commands to bound latency. `applied` is the last consumed sequence, not a promise that every lower sequence ran. When configured to repeat, it repeats the last command for a bounded number of ticks, then calls the game's idle policy. **Use repetition only for held intent, not one-shot actions** such as buying, firing or digging. A game with those actions must disable repetition or use a separate action policy.
 
-`Replicator` accepts only a caller-projected public JSON object. It sends changed top-level entries and removals, not a recursive field or tile diff. Large blocks are supported but a changed block is resent in full; the game chooses useful chunk boundaries. Each connection needs its own replicator. Full baselines and revision numbers make missing deltas detectable. `Replica` requires an ordered stream; reconnect and reset the baseline after a gap.
+`Replicator` accepts only a caller-projected public JSON object. It sends changed top-level entries and removals, not a recursive field or tile diff. Large blocks are supported but a changed block is resent in full; the game chooses useful chunk boundaries. Each connection needs its own replicator. Full baselines and revision numbers make missing deltas detectable. `Replica` requires an ordered stream; reconnect and reset the baseline after a gap. `Replicator<S>` and `Replica<S>` share the public-state type; the replica trusts the stream and has shape `S` once a baseline has been applied.
 
 `TickInbox` preserves every accepted tick, including changes and events, and deduplicates by `(epoch, tick)`. It throws on overflow rather than silently discarding events. The workshop disconnects slow clients and requires a fresh join; it does not resume an interrupted event stream. Ordered WebSocket delivery is not a durable exactly-once event guarantee. Events are consumed with the authoritative snapshot, not delayed until the interpolated visual time; an effect timeline remains to be implemented.
 
