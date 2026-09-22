@@ -1,226 +1,94 @@
-# TODO
+# Engine TODO
 
-The goal is an engine that can run Definitely Safe, our mine-sweeper game, without bloating it. The engine only gains what any game would need, and everything specific to Definitely Safe stays in the game. With the game on the engine, we can build tooling on top of it, starting with a level editor.
+The goal remains to support Definitely Safe without moving its rules into the engine, then build a level editor on shared scene data.
 
-Scenes come first: the level editor needs nothing else, and they can be proven against the game before anything else moves. Most of the simulation and networking pieces already exist, with tests, inside Definitely Safe.
+This branch updates **only the engine repository**. Checked items are implemented and tested in the core or workshop example; they do not claim that Definitely Safe has been migrated. Open items are intentionally not hidden behind the demo. See [README.md](README.md) for API limits and [REVIEW.md](REVIEW.md) for the rebuild decision.
 
-## Scenes and the level editor
+## Scene data and editor foundation
 
-### Scenes as data
+- [x] Load, validate, edit and save versioned scene data without running a simulation.
+- [x] Give scene objects stable ids and settings, in meters where appropriate.
+- [x] Use the same scene settings for physics and visuals; static level content is not sent every tick.
+- [x] Carry scene-wide settings such as gravity and background; schemas can describe lighting, fog and playable areas.
+- [x] Register named object types explicitly, without import-order side effects.
+- [x] Describe nested settings, units, optional fields, enums and validation limits.
+- [x] Declare local, replicated or server-only sharing as type metadata.
+- [ ] Build the editor's property controls from those schemas and enforce sharing policy in its preview.
+- [x] Preview the workshop without loading physics or starting simulation.
+- [x] Treat spawn points as ordinary objects; leave player-join rules to the game.
+- [x] Mix authored objects and seeded generators; validate generated ids and settings.
+- [x] Bake generators into editable objects without changing their expanded ids or settings.
+- [ ] Port Definitely Safe's site generators and layout constraints; prove unchanged maps with its existing fingerprints. Deferred with game integration.
 
-A scene is code today, so a tool can't read or write it. Scenes should be data files that the server, every player's client and the level editor all load the same way. Then the editor and the game always agree on what a level contains.
+## Scene transitions
 
-- [ ] A scene can be loaded, edited and saved without running the game.
-- [ ] The server and every client build the level from the same scene file, so level content is never sent over the network. Today it would be: one Definitely Safe site has about 250 obstacles that never move, and they would be re-sent 60 times a second for as long as the game runs.
-- [ ] Each object in a scene keeps a stable id, so saving a scene doesn't reshuffle it and other things can refer to it.
-- [ ] Scenes are written in meters, whatever units the simulation uses internally.
-- [ ] Scenes hold scene-wide settings beyond gravity, such as the playable area, lighting and fog.
+- [x] Separate session state from level state and dispose old levels on replacement.
+- [x] Switch workshop scenes without disconnecting players, retaining their slots and a persistent counter.
+- [x] Reset prediction/history and send a full replication baseline on an epoch change.
+- [x] Reject a client whose expanded scene data disagrees with the server.
+- [ ] Add scheduled scene activation for games that require every client to change at the same presentation tick. The example changes when the authoritative snapshot is received.
 
-### Object settings
+## Simulation and determinism
 
-An object placed in a scene can only be given a position today. Definitely Safe's levels also need sizes, rotations, variants, fence lengths, water outlines, minefield dimensions and more.
+- [x] Advance fixed ticks; the physics example steps Rapier exactly once per tick.
+- [x] Replace interval drift with a monotonic scheduler and bounded catch-up.
+- [ ] Measure sustained tick rate under Windows/macOS/Linux load. No timer can guarantee throughput on an overloaded or suspended host.
+- [x] Run named orchestration phases in an explicit order and per-object behavior in stable id order.
+- [x] Count runtime ids per collection and skip objects removed or replaced during the current tick.
+- [x] Seed and restore random streams.
+- [x] Record commands and verify replay fingerprints with build/scene identity checks.
+- [x] Include complete physics snapshots in the workshop fingerprint.
+- [x] Compare identical physics command streams in Node and Chromium; keep a fixed regression fingerprint.
+- [ ] Establish the supported cross-platform determinism envelope. CI covers three desktop OSes, but browser/CPU/backend coverage is not universal and game code must also be deterministic.
 
-- [ ] Every object in a scene can carry its own settings.
-- [ ] Each setting, such as a size, is written once, and both the physics and the visuals use it. Today the ground's size is written twice, and the two copies can drift apart.
-- [ ] An object's visuals can read its settings, so a fence is drawn at the length it was placed with.
-- [ ] The editor can draw a scene without running the simulation.
+## Physics
 
-### Object types
-
-The editor needs to know which kinds of objects exist and what settings each one takes.
-
-- [ ] Every kind of object is registered under a name, with a description of its settings.
-- [ ] The editor uses that description to show an object's settings and to reject invalid values.
-- [ ] Each kind of object says how it's shared over the network: built locally on every machine, kept in sync by the server, or kept on the server only.
-- [ ] Registering object types doesn't depend on the order files are loaded in. Definitely Safe's own version of this broke that way.
-
-### Spawn points
-
-Where players appear is a single special-case position today. Definitely Safe seats players in slots that fan out from a point, and puts them back in the same slots after a scene change.
-
-- [ ] Spawn points are ordinary objects placed in a scene.
-- [ ] The game, not the engine, decides what happens when a player joins.
-
-### Hand-made and generated content
-
-Every Definitely Safe map is generated from a site and a random seed, and the level editor is for making levels by hand. Both have to work, side by side. Levels made only by hand would lose the game's variety, and placing hundreds of trees by hand is tedious anyway.
-
-- [ ] A scene can be made entirely by hand, generated entirely from a seed, or mix both.
-- [ ] A scene can contain generators, such as a wall of trees, alongside objects placed by hand.
-- [ ] A generator gives the same result every time for the same seed.
-- [ ] The editor can turn a generator into ordinary objects so they can be edited by hand.
-- [ ] The game's existing layout rules, such as keeping clear space around the minefield, become checks the editor runs.
-
-### Moving between scenes
-
-Definitely Safe moves its players from headquarters to a site and back. Money, equipment, stats and the contract number carry across, and everyone keeps their slot. The engine has one scene, fixed when it starts.
-
-- [ ] The game can switch scenes while players stay connected.
-- [ ] State that belongs to the team rather than to a level survives a scene change.
-- [ ] Every client clears the old scene and loads the new one at the same point in the game.
-
-### Proving the scene system
-
-- [ ] Definitely Safe's existing maps, rebuilt as scene files, play out exactly as they do today. The game's headless run with a fixed seed produces the same state fingerprint as before.
-
-## Simulation
-
-### Fixed tick
-
-The simulation advances by however much real time has passed, so its results depend on the machine and on timing. Its clock also drifts: Definitely Safe measured 21 ticks a second instead of 30 on Windows with the same kind of timer, and replaced it.
-
-- [ ] The simulation advances in fixed steps, with exactly one physics step per tick.
-- [ ] The tick rate holds steady on every platform.
-
-### Determinism
-
-The engine guarantees determinism: the same inputs give the same result on every machine. Definitely Safe's tests, replays and client prediction all rely on it, and so will any game we build later.
-
-- [ ] The same inputs produce the same simulation on every machine and platform, physics included.
-- [ ] Randomness comes from a seed, so it can be replayed.
-- [ ] Object ids are counted per simulation, not across the whole server, so games running side by side don't affect each other.
-- [ ] The simulation's state can be summarized as a fingerprint, to spot two machines drifting apart.
-- [ ] A game session can be recorded and replayed exactly.
-
-### Game objects and orchestrators
-
-Game logic lives in two places. Game objects handle their own simple behavior. Orchestrators handle logic that spans many objects at once, such as Definitely Safe's tick, which makes several passes over all players in a set order. Today, logic can only run as one update per object, in the order objects were created, so the order changes whenever someone joins.
-
-- [ ] Game objects can have their own logic, as they do today.
-- [ ] Orchestrators can run logic across every object of a kind at once.
-- [ ] Game logic runs in named phases, in a fixed order.
-- [ ] The order doesn't depend on when objects were created.
-- [ ] An object destroyed during a tick doesn't update later in that tick. Today it does, after its physics is already gone.
-
-### Physics features
-
-- [ ] An object can have several colliders on one body.
-- [ ] Objects can be joined together, such as by a rope.
-- [ ] Game logic can move players directly while they still collide with the world.
-- [ ] Game logic can query the world, such as casting a ray to see what a player is aiming at.
-- [ ] Objects can have only a collider and no body. This is done on the `collider-only-gameobjects` branch and needs merging. Most of a Definitely Safe site is obstacles like this.
-
-### Crash when destroying static objects
-
-Destroying a static object, such as the ground, while something is touching it crashes the simulation. The bug is in Rapier itself (0.20.0, the latest version). The game doesn't do this today, but destructible walls or platforms would.
-
-- [ ] Static objects can be destroyed while something touches them, without crashing.
+- [x] Support multiple colliders per body and collider-only objects.
+- [x] Expose Rapier joints, queries and kinematic bodies without duplicating its API.
+- [x] Use correctly spelled `onCollision`; handle removal during callbacks and reject unsafe reentrancy.
+- [x] Regress removal of both collider-only and fixed-body floors while a dynamic body rests on them, using pinned Rapier 0.20.0.
+- [ ] Reproduce the original static-removal crash with its exact scene if it differs from these cases. The tested path now passes; this is not a claim to have fixed every upstream Rapier case.
+- [ ] Prove collision-constrained player movement with the game's controller. Workshop movement pushes boxes but is not a full character controller.
 
 ## Networking
 
-### Player commands
+- [x] Send bounded, validated player intent instead of raw keyboard state.
+- [x] Consume increasing commands, acknowledge consumed sequences and reject duplicates/stale epochs.
+- [x] Bound backlog and repeat held input briefly before idling; overflow drops oldest commands explicitly.
+- [ ] Specify a lossless action channel for commands that must not be dropped or repeated. The held-movement queue is not exactly-once gameplay action delivery.
+- [x] Predict local movement and reconcile unacknowledged commands with smoothed visual corrections.
+- [x] Render every browser frame, interpolate fixed ticks and buffer remote snapshots.
+- [ ] Test/tune render delay and correction under realistic jitter, latency and bandwidth limits.
+- [x] Replicate arbitrary public JSON entries and removals; send only changed top-level entries.
+- [x] Allow one state entry to contain a large block instead of an object per tile.
+- [x] Require explicit public-state projection so objects and individual private fields can be omitted.
+- [ ] Prove the game's privacy boundary during integration, including hidden placement seeds and future-affecting state.
+- [x] Preserve accepted snapshot events and state changes through local buffering; detect missing delta baselines and overflow.
+- [ ] Provide durable event ids, acknowledgements and reconnect/resume semantics if exactly-once effects or receipts are required.
+- [ ] Schedule events against the interpolated presentation timeline.
+- [ ] Add a small client-only effects example, including optional collision, without importing physics into effects that do not need it.
 
-Clients send raw key presses today. Definitely Safe sends one command per player per tick describing what the player wants to do, and its prediction and replays are built on that.
+## Server example and hosting
 
-- [ ] Each tick, a client sends one command describing the player's intent.
-- [ ] The server applies each player's commands in order, exactly once, and tells the client which ones it has applied.
-- [ ] Commands that arrive late, early or out of order are handled predictably.
+- [x] Run independent password-protected rooms with stable slots and empty-room cleanup.
+- [x] Reject repeat joins, unknown message types, malformed input and mismatched builds/content without accidentally despawning the player.
+- [x] Limit payloads, messages, room/player counts and outbound backlog; clean up dead connections and server timers.
+- [ ] Add production admission control, deployment configuration and load tests before exposing a public service.
+- [ ] Revisit browser hosting only with an explicit suspension/authority-handoff design. The old relay mode has been removed; background tabs cannot guarantee a running authoritative simulation.
 
-### Responsive movement
+## Browser and rendering
 
-Your own movement waits for a full round trip to the server today.
+- [x] Use physical keyboard codes, handle Shift/release and clear held input on blur/hidden pages.
+- [x] Leave text fields editable and dispose input listeners.
+- [x] Expose mouse deltas/buttons and pointer-lock request/release.
+- [x] Free scene geometry/material/direct texture resources, including sharing within a render collection.
+- [x] Check actual WebGPU device availability and use WebGL2 when unavailable; support forcing WebGL2.
+- [ ] Validate native WebGPU, pointer lock, GPU failure paths and touch/browser compatibility across target devices.
+- [ ] Port and visually compare Definitely Safe's renderer, effects and complete resource graph. A lit-box demo does not establish renderer parity.
 
-- [ ] Your own player responds to input immediately.
-- [ ] When the server disagrees, your player is corrected smoothly instead of snapping.
+## Packaging and game migration
 
-### Smooth rendering
-
-The screen only redraws when a snapshot arrives, so movement is exactly as choppy as the network.
-
-- [ ] The screen redraws every frame, independent of the network.
-- [ ] Movement is smoothed between ticks.
-- [ ] Other players move smoothly through network jitter.
-- [ ] The client stays in step with the server as network conditions change.
-
-### Game state
-
-Only positions and rotations reach the clients today. A Definitely Safe player has about 35 other things clients need to see, and there's also the minefield, the ledger and the team's money.
-
-- [ ] Any object can share its game state with clients, not just where it is.
-- [ ] Only state that changed is sent.
-- [ ] One object can own a large block of state, such as the whole minefield, instead of it being split into an object per tile.
-
-### Secrets
-
-Everything is sent to every client today, so anyone watching the network traffic could see where the mines are.
-
-- [ ] Some state never leaves the server, such as the mine layout.
-- [ ] Part of an object's state can be hidden while the rest is shared, such as which plates in the field are live.
-
-### Game events
-
-Definitely Safe has about 25 kinds of one-off events, such as explosions, that drive its sounds, effects and receipts. They happen once, so they don't fit as state. Client-side effects are one of their uses.
-
-- [ ] The game can send an event that players receive exactly once.
-- [ ] Events stay in step with the state they belong to, so a sound plays when its explosion is seen.
-
-### Client-side effects
-
-Visual effects, such as particles, should only be simulated on each player's own machine. They are purely cosmetic, so the server shouldn't spend time on them or send them to every player.
-
-- [ ] The game can trigger an effect, and every player sees it.
-- [ ] Effects animate smoothly, regardless of network timing.
-- [ ] Effects can collide with the level, but only when an effect needs it. Most don't, and it makes the game heavier to load.
-
-### Rooms
-
-The server runs a single game for everyone. Definitely Safe runs separate rooms that players create and join.
-
-- [ ] One server runs many independent games.
-- [ ] A room can have a password.
-- [ ] Rooms that are no longer used get cleaned up.
-
-### Hosting from a browser
-
-Host mode runs the simulation in a browser tab. Browsers slow background tabs to about one update a second, so when the host switches tabs, everyone's game freezes.
-
-- [ ] A game hosted from a browser keeps running when the host's tab is in the background.
-
-### Untrusted clients
-
-The server trusts whatever clients send.
-
-- [ ] A client can join only once per connection. Today it can spawn as many players as it likes.
-- [ ] Unknown or malformed messages are rejected. Today any unrecognized message quietly removes the player, while they stay connected.
-- [ ] A client can't flood the server with messages.
-
-## Input
-
-### Keyboard
-
-- [ ] Keys never get stuck. Today, holding D, pressing Shift and then releasing D leaves D held forever. The same happens to any key held when the window loses focus.
-- [ ] Controls work the same on every keyboard layout.
-- [ ] Text fields accept typing. Today the engine swallows every key press, so the game's name, room and password fields wouldn't work.
-
-### Mouse
-
-- [ ] The game can read the mouse and lock the pointer for aiming.
-
-## Rendering
-
-### Freeing resources
-
-- [ ] Removing an object or changing scenes frees its GPU memory. Today nothing is freed, so every scene change would leak memory.
-
-### Matching the game's renderer
-
-Definitely Safe uses a newer rendering backend where the browser supports it and falls back where it doesn't. It also checks that the GPU actually works before starting, because some browsers report support they don't have.
-
-- [ ] The engine renders everything the game's renderer does today, on the same range of browsers.
-
-## Platform
-
-### Running on Node
-
-The engine runs on Node, the same as Definitely Safe. The game is already built, tested and deployed on Node, so its pieces can move into the engine with their tests unchanged. The engine only runs on Bun today.
-
-- [ ] The engine's server, client and tests run on Node.
-- [ ] The engine's core doesn't depend on a particular runtime, so switching later stays a small change.
-
-### Public API
-
-- [ ] The collision callback's name, `onCollition`, is spelled correctly. Renaming it is cheap now and expensive once a whole game uses it.
-
-## Moving the game over
-
-- [ ] Definitely Safe runs on the engine. It moves over piece by piece, with its tests, headless fingerprint and end-to-end captures passing at every step.
+- [x] Build and test with Node; separate runtime-neutral core, physics and browser entry points.
+- [x] Demonstrate a second, physics-free simulation with replay verification.
+- [ ] Stabilize/publish the package only after a real consumer tests the API.
+- [ ] Move Definitely Safe over in a separate change, preserving its tests, headless fingerprints and visual captures at every step. **Explicitly deferred.**

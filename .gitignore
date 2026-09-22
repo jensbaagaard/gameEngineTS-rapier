@@ -1,9 +1,11 @@
-# dependencies (bun install)
+# dependencies
 node_modules
 
 # output
 out
 dist
+demo-dist
+evidence/
 *.tgz
 
 # code coverage

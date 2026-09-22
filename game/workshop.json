@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "id": "workshop",
+  "settings": { "gravity": { "x": 0, "y": -9.81, "z": 0 }, "background": "#c4d9e4" },
+  "objects": [
+    { "id": "floor", "type": "ground", "settings": { "position": { "x": 0, "y": -0.25, "z": 0 }, "size": { "x": 24, "y": 0.5, "z": 24 }, "color": "#819c8a" } },
+    { "id": "arrival", "type": "spawn", "settings": { "position": { "x": 0, "y": 0.75, "z": 6 } } },
+    { "id": "stack", "type": "boxes", "seed": 7, "settings": { "count": 12, "spread": 4 } }
+  ]
+}
