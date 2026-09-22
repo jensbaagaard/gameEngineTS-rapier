@@ -41,11 +41,11 @@ The browser check exercises local input, repeated scene changes and GPU disposal
 
 ## Library boundaries
 
-| Entry point | Responsibility |
-| --- | --- |
-| `@sneakpeak/engine` | Scene data, schemas, seeded random streams, phases, entities, clocks, sessions, command queues, replication, prediction, interpolation and replay |
-| `@sneakpeak/engine/physics` | Pinned deterministic Rapier build, explicit body/collider ownership and collision callbacks |
-| `@sneakpeak/engine/browser` | Keyboard, pointer lock, renderer initialization and render-resource ownership; requires Three.js |
+| Entry point                 | Responsibility                                                                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@sneakpeak/engine`         | Scene data, schemas, seeded random streams, phases, entities, clocks, sessions, command queues, replication, prediction, interpolation and replay |
+| `@sneakpeak/engine/physics` | Pinned deterministic Rapier build, explicit body/collider ownership and collision callbacks                                                       |
+| `@sneakpeak/engine/browser` | Keyboard, pointer lock, renderer initialization and render-resource ownership; requires Three.js                                                  |
 
 The package is private and is not published. Build it before consuming it as a local package. `game/`, `main.ts` and `server.ts` are an executable integration example, not part of the exported library. Rooms, authentication policy and wire messages belong there until a second game proves what should be shared.
 
@@ -60,7 +60,9 @@ const registry = new SceneRegistry({
   wall: { sharing: 'local', settings: object({ width: { ...meters, min: 0.1 } }) },
 });
 const scene = registry.parse({
-  version: 1, id: 'yard', settings: {},
+  version: 1,
+  id: 'yard',
+  settings: {},
   objects: [{ id: 'north-wall', type: 'wall', settings: { width: 12 } }],
 });
 const objects = registry.expand(scene);

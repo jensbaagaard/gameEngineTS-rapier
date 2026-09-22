@@ -1,8 +1,12 @@
 export class FixedClock {
   private remainder = 0;
 
-  constructor(readonly stepMs: number, readonly maxSteps = 8) {
-    if (!Number.isFinite(stepMs) || stepMs <= 0 || !Number.isSafeInteger(maxSteps) || maxSteps < 1) throw new Error('Invalid clock configuration');
+  constructor(
+    readonly stepMs: number,
+    readonly maxSteps = 8,
+  ) {
+    if (!Number.isFinite(stepMs) || stepMs <= 0 || !Number.isSafeInteger(maxSteps) || maxSteps < 1)
+      throw new Error('Invalid clock configuration');
   }
 
   advance(elapsedMs: number, step: () => void): number {
@@ -17,8 +21,12 @@ export class FixedClock {
     return this.alpha;
   }
 
-  get alpha(): number { return this.remainder / this.stepMs; }
-  reset(): void { this.remainder = 0; }
+  get alpha(): number {
+    return this.remainder / this.stepMs;
+  }
+  reset(): void {
+    this.remainder = 0;
+  }
 }
 
 export function scheduleTicks(tps: number, step: () => void): () => void {
@@ -30,9 +38,18 @@ export function scheduleTicks(tps: number, step: () => void): () => void {
     const now = performance.now();
     const elapsed = now - last;
     last = now;
-    clock.advance(elapsed, () => { if (active) step(); });
-    if (active) timer = setTimeout(loop, Math.max(1, clock.stepMs * (1 - clock.alpha) - (performance.now() - now)));
+    clock.advance(elapsed, () => {
+      if (active) step();
+    });
+    if (active)
+      timer = setTimeout(
+        loop,
+        Math.max(1, clock.stepMs * (1 - clock.alpha) - (performance.now() - now)),
+      );
   };
   timer = setTimeout(loop, clock.stepMs);
-  return () => { active = false; clearTimeout(timer); };
+  return () => {
+    active = false;
+    clearTimeout(timer);
+  };
 }

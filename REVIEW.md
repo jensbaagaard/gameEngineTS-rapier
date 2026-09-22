@@ -28,16 +28,16 @@ This boundary is provisional: extract more only when the next game demonstrates 
 
 ## Breaking changes
 
-| Prototype | Replacement |
-| --- | --- |
-| `engine/` classes with implicit runtime coupling | `src/` package with separate core/physics/browser entry points |
-| Scene constructors containing game objects | Versioned scene documents plus explicit type/generator registry |
-| `GameObject` lifecycle and global ids | Game-owned objects, `Entities`, named simulation phases and explicit disposal |
-| Variable-time object updates and separate physics accumulation | Game-defined fixed tick with one physics phase |
-| Automatic transform sharing and raw key messages | Explicit public-state projection and validated intent commands |
-| Socket callbacks driving redraw | Frame loop, snapshot buffer and separate authoritative inbox |
-| `onCollition` | `onCollision` |
-| Bun-specific scripts and browser-host relay | Node/pnpm, local mode and dedicated-room example |
+| Prototype                                                      | Replacement                                                                   |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `engine/` classes with implicit runtime coupling               | `src/` package with separate core/physics/browser entry points                |
+| Scene constructors containing game objects                     | Versioned scene documents plus explicit type/generator registry               |
+| `GameObject` lifecycle and global ids                          | Game-owned objects, `Entities`, named simulation phases and explicit disposal |
+| Variable-time object updates and separate physics accumulation | Game-defined fixed tick with one physics phase                                |
+| Automatic transform sharing and raw key messages               | Explicit public-state projection and validated intent commands                |
+| Socket callbacks driving redraw                                | Frame loop, snapshot buffer and separate authoritative inbox                  |
+| `onCollition`                                                  | `onCollision`                                                                 |
+| Bun-specific scripts and browser-host relay                    | Node/pnpm, local mode and dedicated-room example                              |
 
 There is no compatibility layer. The old test scene and rendering stack are removed instead of maintained alongside the replacement.
 

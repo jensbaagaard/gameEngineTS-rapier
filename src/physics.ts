@@ -2,7 +2,10 @@ import RAPIER from '@dimforge/rapier3d-deterministic-compat';
 
 let initialization: Promise<void> | undefined;
 export function initPhysics(): Promise<void> {
-  return initialization ??= RAPIER.init().catch(error => { initialization = undefined; throw error; });
+  return (initialization ??= RAPIER.init().catch((error) => {
+    initialization = undefined;
+    throw error;
+  }));
 }
 
 export class PhysicsWorld {
@@ -21,7 +24,8 @@ export class PhysicsWorld {
   }
 
   step(): void {
-    if (this.disposed || this.running) throw new Error(this.disposed ? 'Physics world is disposed' : 'Physics step is reentrant');
+    if (this.disposed || this.running)
+      throw new Error(this.disposed ? 'Physics world is disposed' : 'Physics step is reentrant');
     this.running = true;
     try {
       this.world.step(this.events);
@@ -32,22 +36,34 @@ export class PhysicsWorld {
         first.onCollision?.(second, started);
         if (this.owners.has(a) && this.owners.has(b)) second.onCollision?.(first, started);
       });
-    } finally { this.running = false; }
+    } finally {
+      this.running = false;
+    }
   }
 
-  add(body?: RAPIER.RigidBodyDesc, colliders: RAPIER.ColliderDesc[] = [], onCollision?: PhysicsObject['onCollision']): PhysicsObject {
+  add(
+    body?: RAPIER.RigidBodyDesc,
+    colliders: RAPIER.ColliderDesc[] = [],
+    onCollision?: PhysicsObject['onCollision'],
+  ): PhysicsObject {
     if (this.disposed) throw new Error('Physics world is disposed');
     const rigidBody = body ? this.world.createRigidBody(body) : undefined;
     const object: PhysicsObject = { body: rigidBody, colliders: [], onCollision };
     this.objects.add(object);
     try {
       for (const descriptor of colliders) {
-        const collider = this.world.createCollider(descriptor.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS), rigidBody);
+        const collider = this.world.createCollider(
+          descriptor.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),
+          rigidBody,
+        );
         object.colliders.push(collider);
         this.owners.set(collider.handle, object);
       }
       return object;
-    } catch (error) { this.remove(object); throw error; }
+    } catch (error) {
+      this.remove(object);
+      throw error;
+    }
   }
 
   remove(object: PhysicsObject): void {

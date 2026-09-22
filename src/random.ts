@@ -26,9 +26,12 @@ export class Rng {
   }
 
   nextU32(): number {
-    const s0 = this.s0, s1 = this.s1, s2 = this.s2, s3 = this.s3;
+    const s0 = this.s0,
+      s1 = this.s1,
+      s2 = this.s2,
+      s3 = this.s3;
     const r5 = Math.imul(s1, 5) >>> 0;
-    const result = (Math.imul(((r5 << 7) | (r5 >>> 25)) >>> 0, 9)) >>> 0;
+    const result = Math.imul(((r5 << 7) | (r5 >>> 25)) >>> 0, 9) >>> 0;
     const t = (s1 << 9) >>> 0;
     let n2 = (s2 ^ s0) >>> 0;
     let n3 = (s3 ^ s1) >>> 0;
@@ -44,7 +47,8 @@ export class Rng {
   }
 
   nextInt(n: number): number {
-    if (!Number.isSafeInteger(n) || n < 1 || n > 0x100000000) throw new Error('Invalid random range');
+    if (!Number.isSafeInteger(n) || n < 1 || n > 0x100000000)
+      throw new Error('Invalid random range');
     return this.nextU32() % n;
   }
 
@@ -67,7 +71,12 @@ export class Rng {
   }
 
   setState(s: [number, number, number, number]): void {
-    if (s.length !== 4 || s.some(n => !Number.isSafeInteger(n) || n < 0 || n > 0xffffffff) || s.every(n => n === 0)) throw new Error('Invalid random state');
+    if (
+      s.length !== 4 ||
+      s.some((n) => !Number.isSafeInteger(n) || n < 0 || n > 0xffffffff) ||
+      s.every((n) => n === 0)
+    )
+      throw new Error('Invalid random state');
     [this.s0, this.s1, this.s2, this.s3] = s;
   }
 }

@@ -1,0 +1,5 @@
+dist
+demo-dist
+evidence
+pnpm-lock.yaml
+game/*.json

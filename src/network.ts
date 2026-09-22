@@ -5,8 +5,17 @@ export class CommandQueue<C> {
   private last: C | undefined;
   applied = 0;
 
-  constructor(readonly capacity: number, readonly repeatTicks: number) {
-    if (!Number.isSafeInteger(capacity) || capacity < 1 || !Number.isSafeInteger(repeatTicks) || repeatTicks < 0) throw new Error('Invalid command queue configuration');
+  constructor(
+    readonly capacity: number,
+    readonly repeatTicks: number,
+  ) {
+    if (
+      !Number.isSafeInteger(capacity) ||
+      capacity < 1 ||
+      !Number.isSafeInteger(repeatTicks) ||
+      repeatTicks < 0
+    )
+      throw new Error('Invalid command queue configuration');
   }
 
   push(sequence: number, command: C): boolean {
@@ -23,15 +32,25 @@ export class CommandQueue<C> {
       this.applied = next.sequence;
       this.last = next.command;
       this.repeated = 0;
-    } else if (this.last === undefined || this.repeated++ >= this.repeatTicks) return idle(this.last);
+    } else if (this.last === undefined || this.repeated++ >= this.repeatTicks)
+      return idle(this.last);
     return structuredClone(this.last!);
   }
 
-  get length(): number { return this.queue.length; }
-  clear(): void { this.queue = []; this.last = undefined; this.repeated = 0; }
+  get length(): number {
+    return this.queue.length;
+  }
+  clear(): void {
+    this.queue = [];
+    this.last = undefined;
+    this.repeated = 0;
+  }
 }
 
-export interface TickMessage { epoch: number; tick: number }
+export interface TickMessage {
+  epoch: number;
+  tick: number;
+}
 
 export class TickInbox<T extends TickMessage> {
   private queue: T[] = [];
@@ -43,16 +62,34 @@ export class TickInbox<T extends TickMessage> {
   }
 
   push(message: T): boolean {
-    if (!Number.isSafeInteger(message.epoch) || message.epoch < 0 || !Number.isSafeInteger(message.tick) || message.tick < 0) throw new Error('Invalid message clock');
-    if (message.epoch < this.epoch || (message.epoch === this.epoch && message.tick <= this.tick)) return false;
-    if (this.queue.length >= this.capacity) throw new Error('Snapshot backlog exceeded; reconnect to synchronize');
+    if (
+      !Number.isSafeInteger(message.epoch) ||
+      message.epoch < 0 ||
+      !Number.isSafeInteger(message.tick) ||
+      message.tick < 0
+    )
+      throw new Error('Invalid message clock');
+    if (message.epoch < this.epoch || (message.epoch === this.epoch && message.tick <= this.tick))
+      return false;
+    if (this.queue.length >= this.capacity)
+      throw new Error('Snapshot backlog exceeded; reconnect to synchronize');
     this.epoch = message.epoch;
     this.tick = message.tick;
     this.queue.push(message);
     return true;
   }
 
-  get length(): number { return this.queue.length; }
-  drain(): T[] { const result = this.queue; this.queue = []; return result; }
-  clear(): void { this.queue = []; this.epoch = -1; this.tick = -1; }
+  get length(): number {
+    return this.queue.length;
+  }
+  drain(): T[] {
+    const result = this.queue;
+    this.queue = [];
+    return result;
+  }
+  clear(): void {
+    this.queue = [];
+    this.epoch = -1;
+    this.tick = -1;
+  }
 }

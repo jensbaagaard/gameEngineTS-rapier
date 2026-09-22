@@ -23,8 +23,19 @@ export class Recorder<C> {
   }
 }
 
-export function verifyReplay<C>(replay: Replay<C>, build: string, scene: string, create: () => ReplaySimulation<C>): number | null {
-  if (replay.version !== 1 || replay.build !== build || replay.scene !== scene || replay.commands.length !== replay.hashes.length) throw new Error('Replay version, build, scene or length mismatch');
+export function verifyReplay<C>(
+  replay: Replay<C>,
+  build: string,
+  scene: string,
+  create: () => ReplaySimulation<C>,
+): number | null {
+  if (
+    replay.version !== 1 ||
+    replay.build !== build ||
+    replay.scene !== scene ||
+    replay.commands.length !== replay.hashes.length
+  )
+    throw new Error('Replay version, build, scene or length mismatch');
   const simulation = create();
   try {
     for (let tick = 0; tick < replay.commands.length; tick++) {
@@ -32,5 +43,7 @@ export function verifyReplay<C>(replay: Replay<C>, build: string, scene: string,
       if (simulation.hash() !== replay.hashes[tick]) return tick;
     }
     return null;
-  } finally { simulation.dispose(); }
+  } finally {
+    simulation.dispose();
+  }
 }

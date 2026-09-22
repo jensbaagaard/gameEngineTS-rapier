@@ -1,9 +1,26 @@
-import { AmbientLight, BoxGeometry, Color, DirectionalLight, Group, Mesh, MeshStandardMaterial, PerspectiveCamera, Quaternion, Scene, Vector3, type WebGPURenderer } from 'three/webgpu';
+import {
+  AmbientLight,
+  BoxGeometry,
+  Color,
+  DirectionalLight,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  PerspectiveCamera,
+  Quaternion,
+  Scene,
+  Vector3,
+  type WebGPURenderer,
+} from 'three/webgpu';
 import { RenderObjects } from '../src/browser.js';
 import type { Properties } from '../src/index.js';
 import { getScene, registry, type Vector } from './scene.js';
 
-export interface Pose { type: string; position: Vector; rotation: Vector & { w: number } }
+export interface Pose {
+  type: string;
+  position: Vector;
+  rotation: Vector & { w: number };
+}
 const quaternion = new Quaternion();
 const position = new Vector3();
 
@@ -41,7 +58,11 @@ export class DemoView {
     this.scene.background = new Color(document.settings.background as string);
     for (const entry of registry.expand(document)) {
       if (entry.type === 'spawn') continue;
-      const settings = entry.settings as unknown as { position: Vector; size: Vector; color: string };
+      const settings = entry.settings as unknown as {
+        position: Vector;
+        size: Vector;
+        color: string;
+      };
       const mesh = this.mesh(settings.size, settings.color);
       mesh.position.copy(settings.position);
       this.visuals.add(entry.id, mesh);
@@ -49,11 +70,21 @@ export class DemoView {
   }
 
   private mesh(size: Vector, color: string): Mesh {
-    return new Mesh(new BoxGeometry(size.x, size.y, size.z), new MeshStandardMaterial({ color, roughness: 0.8 }));
+    return new Mesh(
+      new BoxGeometry(size.x, size.y, size.z),
+      new MeshStandardMaterial({ color, roughness: 0.8 }),
+    );
   }
 
-  draw(from: Properties, to: Properties, alpha: number, playerId?: string, predicted?: Vector): void {
-    for (const id of this.visuals.objects.keys()) if (id.startsWith('player:') && !Object.hasOwn(to, id)) this.visuals.remove(id);
+  draw(
+    from: Properties,
+    to: Properties,
+    alpha: number,
+    playerId?: string,
+    predicted?: Vector,
+  ): void {
+    for (const id of this.visuals.objects.keys())
+      if (id.startsWith('player:') && !Object.hasOwn(to, id)) this.visuals.remove(id);
     for (const [id, data] of Object.entries(to)) {
       const pose = data as unknown as Pose;
       let mesh = this.visuals.objects.get(id);
@@ -70,7 +101,15 @@ export class DemoView {
     this.render();
   }
 
-  render(): void { this.renderer.render(this.scene, this.camera); }
-  get currentScene(): string { return this.sceneId; }
-  dispose(): void { this.listeners.abort(); this.visuals.dispose(); this.renderer.dispose(); }
+  render(): void {
+    this.renderer.render(this.scene, this.camera);
+  }
+  get currentScene(): string {
+    return this.sceneId;
+  }
+  dispose(): void {
+    this.listeners.abort();
+    this.visuals.dispose();
+    this.renderer.dispose();
+  }
 }

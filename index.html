@@ -8,20 +8,62 @@
       body {
         margin: 0;
         overflow: hidden;
-        font: 14px system-ui, sans-serif;
+        font:
+          14px system-ui,
+          sans-serif;
         color: #22343e;
       }
-      canvas { display: block; }
-      aside { position: fixed; top: 20px; left: 20px; max-width: 440px; padding: 20px; border-radius: 12px; background: #fffffff0; box-shadow: 0 5px 24px #25394222; }
-      h1 { margin: 0 0 8px; font-size: 22px; }
-      p { margin: 8px 0; line-height: 1.5; }
-      nav, .scenes { display: flex; gap: 12px; margin: 12px 0; }
-      a { color: #246097; }
-      button, input { font: inherit; padding: 7px 10px; border: 1px solid #b1bfc6; border-radius: 5px; }
-      button { cursor: pointer; background: #ecf2f4; }
-      input { width: 140px; }
-      output { display: block; margin-top: 12px; }
-      form[hidden] { display: none; }
+      canvas {
+        display: block;
+      }
+      aside {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        max-width: 440px;
+        padding: 20px;
+        border-radius: 12px;
+        background: #fffffff0;
+        box-shadow: 0 5px 24px #25394222;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 22px;
+      }
+      p {
+        margin: 8px 0;
+        line-height: 1.5;
+      }
+      nav,
+      .scenes {
+        display: flex;
+        gap: 12px;
+        margin: 12px 0;
+      }
+      a {
+        color: #246097;
+      }
+      button,
+      input {
+        font: inherit;
+        padding: 7px 10px;
+        border: 1px solid #b1bfc6;
+        border-radius: 5px;
+      }
+      button {
+        cursor: pointer;
+        background: #ecf2f4;
+      }
+      input {
+        width: 140px;
+      }
+      output {
+        display: block;
+        margin-top: 12px;
+      }
+      form[hidden] {
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -29,11 +71,31 @@
     <aside>
       <h1>Engine workshop</h1>
       <p>Move with WASD. Push the boxes, switch scenes, or inspect a level before it runs.</p>
-      <nav><a href="/">Local game</a><a href="/?online">Online rooms</a><a href="/?preview">Scene preview</a></nav>
-      <div class="scenes"><button data-scene="workshop">Workshop</button><button data-scene="courtyard">Courtyard</button></div>
+      <nav>
+        <a href="/">Local game</a><a href="/?online">Online rooms</a
+        ><a href="/?preview">Scene preview</a>
+      </nav>
+      <div class="scenes">
+        <button data-scene="workshop">Workshop</button
+        ><button data-scene="courtyard">Courtyard</button>
+      </div>
       <button id="export">Bake &amp; download scene</button>
       <form id="room" hidden>
-        <p><input name="room" aria-label="Room name" placeholder="Room name" required maxlength="32"><input name="password" type="password" aria-label="Room password" placeholder="Password" maxlength="64"></p>
+        <p>
+          <input
+            name="room"
+            aria-label="Room name"
+            placeholder="Room name"
+            required
+            maxlength="32"
+          /><input
+            name="password"
+            type="password"
+            aria-label="Room password"
+            placeholder="Password"
+            maxlength="64"
+          />
+        </p>
         <button value="create">Create room</button> <button value="join">Join room</button>
       </form>
       <output id="status" aria-live="polite">Loading…</output>

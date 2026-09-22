@@ -3,13 +3,27 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./physics": { "types": "./dist/physics.d.ts", "import": "./dist/physics.js" },
-    "./browser": { "types": "./dist/browser.d.ts", "import": "./dist/browser.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./physics": {
+      "types": "./dist/physics.d.ts",
+      "import": "./dist/physics.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
+    }
   },
-  "engines": { "node": ">=22.12" },
+  "engines": {
+    "node": ">=22.12"
+  },
   "packageManager": "pnpm@12.4.2",
   "scripts": {
     "build": "tsc -p tsconfig.json && vite build",
@@ -17,24 +31,36 @@
     "test": "vitest run",
     "test:browser": "tsx tests/browser.ts",
     "start": "tsx server.ts",
-    "demo:headless": "tsx examples/counter.ts"
+    "demo:headless": "tsx examples/counter.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@types/node": "^22.20.2",
-    "@types/ws": "^8.18.1",
     "@types/three": "^0.186.0",
-    "ws": "^8.18.0",
+    "@types/ws": "^8.18.1",
+    "playwright": "1.63.0",
+    "prettier": "^3.9.8",
     "tsx": "4.23.13",
     "typescript": "7.0.2",
-    "vitest": "5.0.0",
     "vite": "8.3.0",
-    "playwright": "1.63.0"
+    "vitest": "5.0.0",
+    "ws": "^8.18.0"
   },
   "peerDependencies": {
     "three": "^0.186.0"
   },
-  "peerDependenciesMeta": { "three": { "optional": true } },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@dimforge/rapier3d-deterministic-compat": "0.20.0"
+  },
+  "prettier": {
+    "printWidth": 100,
+    "singleQuote": true,
+    "endOfLine": "auto"
   }
 }

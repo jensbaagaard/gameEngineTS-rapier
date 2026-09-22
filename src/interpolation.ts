@@ -1,7 +1,8 @@
 export class SnapshotBuffer<T> {
   private samples: { tick: number; value: T }[] = [];
   constructor(readonly capacity = 48) {
-    if (!Number.isSafeInteger(capacity) || capacity < 2) throw new Error('Invalid snapshot capacity');
+    if (!Number.isSafeInteger(capacity) || capacity < 2)
+      throw new Error('Invalid snapshot capacity');
   }
 
   push(tick: number, value: T): void {
@@ -16,10 +17,19 @@ export class SnapshotBuffer<T> {
     if (!this.samples.length) return;
     let i = this.samples.length - 1;
     while (i > 0 && this.samples[i]!.tick > tick) i--;
-    const a = this.samples[i]!, b = this.samples[i + 1] ?? a;
-    return { from: a.value, to: b.value, alpha: a === b ? 0 : Math.max(0, Math.min(1, (tick - a.tick) / (b.tick - a.tick))) };
+    const a = this.samples[i]!,
+      b = this.samples[i + 1] ?? a;
+    return {
+      from: a.value,
+      to: b.value,
+      alpha: a === b ? 0 : Math.max(0, Math.min(1, (tick - a.tick) / (b.tick - a.tick))),
+    };
   }
 
-  get newestTick(): number { return this.samples.at(-1)?.tick ?? -1; }
-  clear(): void { this.samples = []; }
+  get newestTick(): number {
+    return this.samples.at(-1)?.tick ?? -1;
+  }
+  clear(): void {
+    this.samples = [];
+  }
 }
