@@ -35,10 +35,11 @@ This branch updates **only the engine repository**. Checked items are implemente
 - [x] Run named orchestration phases in an explicit order and per-object behavior in stable id order.
 - [x] Count runtime ids per collection and skip objects removed or replaced during the current tick.
 - [x] Seed and restore random streams.
-- [x] Record commands and verify replay fingerprints with build/scene identity checks.
+- [x] Keep `Rng.shuffle` and `Hasher.bool` byte-compatible with Definitely Safe so its map and replay fingerprints survive a move.
+- [x] Record commands and verify replay fingerprints with build/scene identity checks and an optional setup payload.
 - [x] Include complete physics snapshots in the workshop fingerprint.
 - [x] Compare identical physics command streams in Node and Chromium; keep a fixed regression fingerprint.
-- [ ] `toQuaternion` is the only trigonometry in the simulation. Confirm `Math.sin`/`Math.cos` agree across supported browsers or store quaternions in scene data.
+- [ ] `toQuaternion` is the only trigonometry in the simulation. Node, Chromium and WebKit 26.6 on macOS 15 produced identical quaternions and physics hashes on 2026-09-23; confirm the remaining platforms or store quaternions in scene data.
 - [ ] Establish the supported cross-platform determinism envelope. CI covers three desktop OSes, but browser/CPU/backend coverage is not universal and game code must also be deterministic.
 
 ## Physics
@@ -54,15 +55,16 @@ This branch updates **only the engine repository**. Checked items are implemente
 
 - [x] Send bounded, validated player intent instead of raw keyboard state.
 - [x] Consume increasing commands, acknowledge consumed sequences and reject duplicates/stale epochs.
-- [x] Bound backlog and repeat held input briefly before idling; overflow drops oldest commands explicitly.
+- [x] Bound backlog and repeat held input briefly before idling; a command beyond the bound is an error the room turns into a disconnect, so input is never dropped silently.
 - [ ] Specify a lossless action channel for commands that must not be dropped or repeated. The held-movement queue is not exactly-once gameplay action delivery.
 - [x] Predict local movement and reconcile unacknowledged commands with smoothed visual corrections.
 - [x] Render every browser frame, interpolate fixed ticks and buffer remote snapshots.
+- [x] Run the presentation clock in the engine (`RenderClock`) and extrapolate a bounded distance when snapshots run late.
 - [ ] Test/tune render delay and correction under realistic jitter, latency and bandwidth limits.
 - [x] Replicate arbitrary public JSON entries and removals; send only changed top-level entries.
 - [x] Allow one state entry to contain a large block instead of an object per tile.
 - [x] Require explicit public-state projection so objects and individual private fields can be omitted.
-- [ ] Prove the game's privacy boundary during integration, including hidden placement seeds and future-affecting state.
+- [ ] Prove the game's privacy boundary during integration, including hidden placement seeds and future-affecting state. Today the game sends its sim seed to clients, and that seed plus the first dug cell determines the mine layout; the mine stream must become server-only.
 - [x] Preserve accepted snapshot events and state changes through local buffering; detect missing delta baselines and overflow.
 - [ ] Provide durable event ids, acknowledgements and reconnect/resume semantics if exactly-once effects or receipts are required.
 - [ ] Schedule events against the interpolated presentation timeline.
@@ -74,13 +76,14 @@ This branch updates **only the engine repository**. Checked items are implemente
 - [x] Reject repeat joins, unknown message types, malformed input and mismatched builds/content without accidentally despawning the player.
 - [x] Limit payloads, messages, room/player counts and outbound backlog; clean up dead connections and server timers.
 - [ ] Add production admission control, deployment configuration and load tests before exposing a public service.
+- [ ] Extract room and lobby management once Definitely Safe adopts the network primitives; its room server and the workshop's are the same design.
 - [ ] Revisit browser hosting only with an explicit suspension/authority-handoff design. The old relay mode has been removed; background tabs cannot guarantee a running authoritative simulation.
 
 ## Browser and rendering
 
 - [x] Use physical keyboard codes, handle Shift/release and clear held input on blur/hidden pages.
 - [x] Leave text fields editable and dispose input listeners.
-- [x] Expose mouse deltas/buttons and pointer-lock request/release.
+- [ ] Expose mouse deltas/buttons and pointer-lock request/release. Nothing in `src/browser.ts` does this yet; Definitely Safe's input module is the reference, to extract once a second first-person consumer exists.
 - [x] Free scene geometry/material/direct texture resources, including sharing within a render collection.
 - [x] Check actual WebGPU device availability and use WebGL2 when unavailable; support forcing WebGL2.
 - [ ] Validate native WebGPU, GPU failure paths and touch/browser compatibility across target devices.

@@ -17,9 +17,10 @@ export class CommandQueue<C> {
 
   push(sequence: number, command: C): boolean {
     if (!Number.isSafeInteger(sequence) || sequence <= this.received) return false;
+    if (this.queue.length >= this.capacity)
+      throw new Error('Command backlog exceeded; reconnect to synchronize');
     this.received = sequence;
     this.queue.push({ sequence, command: structuredClone(command) });
-    if (this.queue.length > this.capacity) this.queue.splice(0, this.queue.length - this.capacity);
     return true;
   }
 

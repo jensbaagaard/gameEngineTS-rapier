@@ -33,7 +33,7 @@ flowchart TB
   subgraph core["src/ — engine core (headless)"]
     schema["schema.ts · scene.ts<br/>validation, inferred types, SceneRegistry"]
     loop["simulation.ts · clock.ts · session.ts<br/>phases, Entities, FixedClock, Session"]
-    net["network.ts · replication.ts · interpolation.ts<br/>CommandQueue, TickInbox, Replicator, Replica,<br/>Prediction, SnapshotBuffer"]
+    net["network.ts · replication.ts · interpolation.ts<br/>CommandQueue, TickInbox, Replicator, Replica,<br/>Prediction, SnapshotBuffer, RenderClock"]
     det["random.ts · hash.ts · replay.ts<br/>Rng, Hasher, Recorder, verifyReplay"]
   end
 
@@ -129,7 +129,7 @@ sequenceDiagram
 
 Details that matter:
 
-- `CommandQueue` takes at most one command per tick. If none arrived it repeats the last one for up to 3 ticks, then falls back to `idle()`. This is right for held movement and wrong for one-shot actions like firing.
+- `CommandQueue` takes at most one command per tick. If none arrived it repeats the last one for up to 3 ticks, then falls back to `idle()`. This is right for held movement and wrong for one-shot actions like firing. A client that queues more than 12 commands ahead gets an error and is disconnected, so input is never dropped silently.
 - `Replicator` compares each top-level entry's canonical JSON with what it sent last time, and sends only changed entries plus removals. After a reset it sends a full baseline (`base: null`).
 - `state()` is the **only** thing clients ever see. Whatever the game leaves out of it stays private.
 
@@ -164,7 +164,7 @@ sequenceDiagram
     O->>Pr: push(readInput())
     O-->>O: send {type: command, epoch, sequence, command}
   end
-  Note over O: renderTick chases newestTick − 2
+  Note over O: RenderClock chases newestTick − 2
   O->>H: sample(renderTick)
   H-->>O: {from, to, alpha}
   O->>V: draw(from, to, alpha, playerId, predicted position)
@@ -173,7 +173,7 @@ sequenceDiagram
 Three timelines are in play:
 
 1. **Authoritative**: what the server said. `Replica` holds the latest state; `SnapshotBuffer` keeps the last 48 ticks so we can interpolate between them.
-2. **Presentation**: `renderTick` runs about two ticks behind the newest snapshot so there is always something to interpolate toward. It drifts gently toward the target and snaps if it falls more than 8 ticks behind.
+2. **Presentation**: `RenderClock` runs about two ticks behind the newest snapshot so there is always something to interpolate toward. It drifts gently toward the target and snaps if it falls more than 8 ticks behind. `SnapshotBuffer` can extrapolate a bounded distance when snapshots run late; the workshop leaves that at zero.
 3. **Predicted**: your own player moves immediately from local input. When the server's answer arrives, `Prediction.correct()` rewinds to the authoritative position and replays commands the server has not acknowledged yet. The visible difference is smoothed away instead of popping.
 
 Everyone else is drawn on the presentation timeline. You are drawn on the predicted timeline.
@@ -292,7 +292,7 @@ Every client message is validated with the same `Schema` machinery that validate
 | `src/session.ts`                              | `Session`: persistent state + swappable level + epoch                            | scene transitions                                 |
 | `src/network.ts`                              | `CommandQueue` (server side), `TickInbox` (client side)                          | input arrival and snapshot ordering               |
 | `src/replication.ts`                          | `canonical`, `Replicator`, `Replica`, `Prediction`                               | what goes over the wire and how corrections apply |
-| `src/interpolation.ts`                        | `SnapshotBuffer`                                                                 | smooth remote movement                            |
+| `src/interpolation.ts`                        | `SnapshotBuffer`, `RenderClock`                                                  | smooth remote movement                            |
 | `src/random.ts` `src/hash.ts` `src/replay.ts` | `Rng`, `Hasher`, `Recorder`, `verifyReplay`                                      | determinism checks                                |
 | `src/physics.ts`                              | `PhysicsWorld`: ownership and collision callbacks over Rapier                    | bodies, colliders, joints, queries                |
 | `src/browser.ts`                              | `createRenderer`, `Keyboard`, `RenderObjects`                                    | input and GPU resource lifetime                   |

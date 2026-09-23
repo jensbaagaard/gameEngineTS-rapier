@@ -53,6 +53,18 @@ The example predicts simple movement, not an interacting Rapier world. It uses a
 
 Resource disposal covers the ownership model used here, not every possible Three.js graph. Shared assets outside a collection and custom renderer resources need deliberate ownership. The room server is a development integration example, not a production security or scalability certification.
 
+## Readiness for Definitely Safe (2026-09-23)
+
+A read of the game against this engine found the fit better than the TODO suggests, because the two share their bones: the same `Rng` and `Hasher` algorithms, the same fixed tick and command-queue design, the same Rapier build, and the same pattern of a session carrying the company into each new level. Adoption should still begin with scene conversion.
+
+What already fits: `Session` for contracts and the headquarters departure; `CommandQueue`, `TickInbox`, `Replica` and `Prediction` for the netcode, including the bounded queues and the idle-keeps-held-buttons semantics the game's reliability tests ask for; `PhysicsWorld` for the wagon, loose items, kinematic players and the rope joint; scene documents with one seeded site generator, since the maps are already plain data and every rotation is a yaw.
+
+Added for it: `Rng.shuffle` and `Hasher.bool`, a setup payload in replays, an error instead of silent drops when a command queue overflows, and `RenderClock` plus bounded extrapolation in `src/interpolation.ts`.
+
+Stays in the game: the renderer, asset baking, audio, HUD and the pointer-lock input module; the integer player controller, with Rapier only behind the wagon and loose items; the teleport cut, which is a per-entity view decision the generic `SnapshotBuffer` cannot make.
+
+Found in the game: its sim seed reaches clients and, with the first dug cell, determines the mine layout. The mirror never places mines, so the seed can stop going out. Do that in the migration.
+
 ## Later Minesweeper migration gate
 
 Begin with scene conversion only. Keep the game engine-independent until its generated maps and a fixed-seed headless run are unchanged. Then move fixed stepping/lifecycle, state projection and transport independently, keeping its existing tests and captures green after each step. Keep hidden mine-generation inputs server-side from the start.

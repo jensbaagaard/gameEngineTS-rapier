@@ -6,6 +6,7 @@ import {
   Hasher,
   Prediction,
   Recorder,
+  RenderClock,
   Replica,
   Replicator,
   Rng,
@@ -141,9 +142,11 @@ describe('network state', () => {
     expect(queue.take(() => ({ x: 0 }))).toEqual({ x: 3 });
     expect(queue.take(() => ({ x: 0 }))).toEqual({ x: 0 });
     expect(queue.applied).toBe(3);
-    for (let i = 4; i < 20; i++) queue.push(i, { x: i });
+    queue.push(4, { x: 4 });
+    queue.push(5, { x: 5 });
+    expect(() => queue.push(6, { x: 6 })).toThrow('reconnect');
     expect(queue.length).toBe(2);
-    expect(queue.take(() => ({ x: 0 }))).toEqual({ x: 18 });
+    expect(queue.take(() => ({ x: 0 }))).toEqual({ x: 4 });
   });
   it('preserves queued events and changes across scene boundaries', () => {
     const inbox = new TickInbox<{ epoch: number; tick: number; event: string }>(3);
@@ -214,15 +217,31 @@ describe('network state', () => {
     expect(prediction.state.x).toBe(2);
     expect(() => prediction.correct({ x: 0 }, 3)).toThrow();
   });
-  it('interpolates across jitter and holds the latest sample without unbounded extrapolation', () => {
+  it('interpolates across jitter, extrapolates a bounded distance and then holds', () => {
     const buffer = new SnapshotBuffer<number>();
     buffer.push(1, 10);
     buffer.push(4, 40);
     expect(buffer.sample(2)).toEqual({ from: 10, to: 40, alpha: 1 / 3 });
-    expect(buffer.sample(100)).toEqual({ from: 40, to: 40, alpha: 0 });
+    expect(buffer.sample(100)).toEqual({ from: 10, to: 40, alpha: 1 });
     expect(() => buffer.sample(NaN)).toThrow('presentation tick');
+    const ahead = new SnapshotBuffer<number>(48, 2);
+    ahead.push(1, 10);
+    ahead.push(4, 40);
+    expect(ahead.sample(5)).toEqual({ from: 10, to: 40, alpha: 4 / 3 });
+    expect(ahead.sample(100)).toEqual({ from: 10, to: 40, alpha: 1 + 2 / 3 });
     buffer.clear();
     expect(buffer.sample(2)).toBeUndefined();
+  });
+  it('runs the render clock behind the newest snapshot, easing toward it and snapping when far off', () => {
+    const clock = new RenderClock(60);
+    expect(clock.advance(16, 10)).toBe(8);
+    const eased = clock.advance(1000 / 60, 12);
+    expect(eased).toBeGreaterThan(9);
+    expect(eased).toBeLessThan(9.1);
+    expect(clock.advance(16, 100)).toBe(98);
+    clock.reset();
+    expect(clock.advance(16, 20)).toBe(18);
+    expect(() => new RenderClock(0)).toThrow('render clock');
   });
 });
 
@@ -245,10 +264,17 @@ describe('deterministic utilities', () => {
     expect(() => rng.setState([0, 0, 0, 0])).toThrow();
     expect(() => rng.setState([1, 2, 3, -1])).toThrow();
   });
-  it('verifies replays, reports first divergence, and frees simulations on failure', () => {
+  it('keeps shuffle and boolean hashing byte-compatible with Definitely Safe', () => {
+    const rng = new Rng(7);
+    const order = rng.shuffle(Array.from({ length: 10 }, (_, i) => i));
+    expect(order).toEqual([7, 9, 6, 2, 5, 1, 8, 0, 4, 3]);
+    expect(rng.shuffle([0, 1, 2, 3, 4])).toEqual([2, 1, 3, 4, 0]);
+    expect(new Hasher().int(1).bool(true).bool(false).int(-2).digest()).toBe(0x72731b68);
+  });
+  it('verifies replays from their setup, reports first divergence, and frees simulations', () => {
     const dispose = vi.fn();
-    const create = () => {
-      let n = 0;
+    const create = (setup?: { start: number }) => {
+      let n = setup?.start ?? 0;
       return {
         step: (c: number) => {
           n += c;
@@ -257,16 +283,17 @@ describe('deterministic utilities', () => {
         dispose,
       };
     };
-    const recorder = new Recorder<number>('v1', 'scene');
-    const sim = create();
+    const recorder = new Recorder<number, { start: number }>('v1', 'scene', { start: 5 });
+    const sim = create(recorder.replay.setup);
     for (const c of [1, 2, 3]) {
       sim.step(c);
       recorder.record(c, sim.hash());
     }
     expect(verifyReplay(recorder.replay, 'v1', 'scene', create)).toBeNull();
+    expect(verifyReplay(recorder.replay, 'v1', 'scene', () => create())).toBe(0);
     recorder.replay.commands[1] = 4;
     expect(verifyReplay(recorder.replay, 'v1', 'scene', create)).toBe(1);
-    expect(dispose).toHaveBeenCalledTimes(2);
+    expect(dispose).toHaveBeenCalledTimes(3);
     expect(() => verifyReplay(recorder.replay, 'v2', 'scene', create)).toThrow('mismatch');
   });
 });

@@ -1,6 +1,9 @@
+// Online mode: the server simulates. This client sends input, predicts its own player so it feels
+// immediate, and draws everyone else a little behind the newest snapshot so they move smoothly.
 import {
   FixedClock,
   Prediction,
+  RenderClock,
   Replica,
   SnapshotBuffer,
   TickInbox,
@@ -19,11 +22,8 @@ import {
 } from './protocol.js';
 import type { DemoView } from './view.js';
 
-const RENDER_DELAY_TICKS = 2;
-const RESYNC_THRESHOLD_TICKS = 8;
-const RENDER_DRIFT_MS = 500;
-const CORRECTION_DECAY_MS = 80;
-const CORRECTION_SNAP_DISTANCE = 3;
+const CORRECTION_DECAY_MS = 80; // how quickly a server correction fades out of view
+const CORRECTION_SNAP_DISTANCE = 3; // larger corrections, in meters, snap instead of fading
 
 export interface OnlineEvents {
   status(text: string): void;
@@ -32,15 +32,15 @@ export interface OnlineEvents {
 
 export class OnlineClient {
   private socket?: WebSocket;
-  private readonly clock = new FixedClock(1000 / TPS);
-  private readonly inbox = new TickInbox<Snapshot>();
-  private readonly history = new SnapshotBuffer<PublicState>();
-  private replica = new Replica<PublicState>();
-  private prediction?: Prediction<Vector, Command>;
+  private readonly clock = new FixedClock(1000 / TPS); // paces commands at exactly TPS
+  private readonly inbox = new TickInbox<Snapshot>(); // arriving snapshots, stale ones dropped
+  private readonly history = new SnapshotBuffer<PublicState>(); // recent states to draw between
+  private replica = new Replica<PublicState>(); // rebuilds the full state from the server's patches
+  private prediction?: Prediction<Vector, Command>; // my own position, run ahead of the server
   private playerId = 'player:0';
-  private epoch = 0;
-  private renderTick = -1;
-  private correction: Vector = { x: 0, y: 0, z: 0 };
+  private epoch = 0; // the server's scene generation, bumped on every scene change
+  private readonly renderClock = new RenderClock(TPS); // the tick being drawn, behind the newest
+  private correction: Vector = { x: 0, y: 0, z: 0 }; // visual offset that hides the last correction
 
   constructor(
     private readonly view: DemoView,
@@ -59,6 +59,7 @@ export class OnlineClient {
     this.events.status('Connecting…');
     socket.onopen = () =>
       this.send({ type: 'join', version: VERSION, content: CONTENT, room, password, create });
+    // Handlers check the socket is still current, so a stale connection cannot interfere.
     socket.onmessage = (event) => {
       if (this.socket === socket) this.handleMessage(String(event.data));
     };
@@ -83,11 +84,13 @@ export class OnlineClient {
     }
   }
 
+  // Errors before joining end the attempt; errors inside a room are only shown.
   private handleError(message: string): void {
     this.events.status(message);
     if (!this.prediction) this.disconnect(message);
   }
 
+  // Prediction starts where the server placed us and uses the same move() the server runs.
   private handleWelcome(message: Welcome): void {
     if (message.version !== VERSION) throw new Error('Version mismatch; reload');
     this.playerId = message.id;
@@ -95,7 +98,7 @@ export class OnlineClient {
     this.inbox.clear();
     this.history.clear();
     this.replica = new Replica<PublicState>();
-    this.renderTick = -1;
+    this.renderClock.reset();
     this.prediction = new Prediction(message.position, move);
     this.events.inRoom(true);
     this.events.status(`Online · ${this.playerId} · WASD to move`);
@@ -117,6 +120,7 @@ export class OnlineClient {
     if (this.prediction) this.send({ type: 'scene', scene });
   }
 
+  // Called once per animation frame: apply what arrived, send input at TPS, then draw.
   frame(elapsedMs: number, readInput: () => Command): void {
     try {
       this.applySnapshots();
@@ -127,17 +131,20 @@ export class OnlineClient {
     }
   }
 
+  // Predicts the input locally right away and sends it numbered, so the server can acknowledge it.
   private command(input: Command): void {
     if (!this.prediction || this.socket?.readyState !== WebSocket.OPEN) return;
     const sequence = this.prediction.push(input);
     this.send({ type: 'command', epoch: this.epoch, sequence, command: input });
   }
 
+  // Applies every snapshot that arrived since the last frame, in tick order.
   private applySnapshots(): void {
     for (const snapshot of this.inbox.drain()) {
       const newEpoch = this.epoch !== snapshot.epoch;
       this.replica.apply(snapshot.patch);
       const me = this.replica.state[this.playerId];
+      // A new epoch or scene name means the room changed scene: reload visuals, restart drawing.
       if (newEpoch || this.view.currentScene !== snapshot.scene) this.travel(snapshot, me);
       if (this.prediction && me)
         this.reconcile(this.prediction, me.position, snapshot.ack, newEpoch);
@@ -152,11 +159,13 @@ export class OnlineClient {
     this.epoch = snapshot.epoch;
     this.view.load(snapshot.scene);
     this.history.clear();
-    this.renderTick = -1;
+    this.renderClock.reset();
     this.correction = { x: 0, y: 0, z: 0 };
     if (me) this.prediction?.reset({ ...me.position });
   }
 
+  // Rewinds the prediction to the server's position and replays commands it has not applied yet.
+  // The jump this would cause on screen is stored so draw() can fade it out instead of popping.
   private reconcile(
     prediction: Prediction<Vector, Command>,
     authoritative: Vector,
@@ -177,32 +186,26 @@ export class OnlineClient {
 
   private draw(elapsedMs: number): void {
     if (this.history.newestTick < 0) {
-      this.view.render();
+      this.view.render(); // nothing received yet: show the empty scene
       return;
     }
-    this.advanceRenderTick(elapsedMs);
-    const sample = this.history.sample(this.renderTick)!;
+    const renderTick = this.renderClock.advance(elapsedMs, this.history.newestTick);
+    const sample = this.history.sample(renderTick)!;
+    // Fade the correction a little every frame.
     const decay = Math.exp(-elapsedMs / CORRECTION_DECAY_MS);
     this.correction.x *= decay;
     this.correction.z *= decay;
-    const predicted = this.prediction
-      ? {
-          x: this.prediction.state.x + this.correction.x,
-          y: this.prediction.state.y,
-          z: this.prediction.state.z + this.correction.z,
-        }
-      : undefined;
-    this.view.draw(sample.from, sample.to, sample.alpha, this.playerId, predicted);
+    this.view.draw(sample.from, sample.to, sample.alpha, this.playerId, this.predictedPosition());
   }
 
-  private advanceRenderTick(elapsedMs: number): void {
-    const target = this.history.newestTick - RENDER_DELAY_TICKS;
-    if (this.renderTick < 0 || Math.abs(target - this.renderTick) > RESYNC_THRESHOLD_TICKS) {
-      this.renderTick = target;
-      return;
-    }
-    this.renderTick += (elapsedMs / 1000) * TPS;
-    this.renderTick += (target - this.renderTick) * (1 - Math.exp(-elapsedMs / RENDER_DRIFT_MS));
+  // Where my player is drawn: the prediction plus the fading correction. Undefined before joining.
+  private predictedPosition(): Vector | undefined {
+    if (!this.prediction) return;
+    return {
+      x: this.prediction.state.x + this.correction.x,
+      y: this.prediction.state.y,
+      z: this.prediction.state.z + this.correction.z,
+    };
   }
 
   dispose(): void {

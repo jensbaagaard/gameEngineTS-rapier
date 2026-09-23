@@ -1,3 +1,4 @@
+// The room server: one Session per room, a tick loop while it has players, a snapshot per tick.
 import { createServer, type Server } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CommandQueue, Replicator, Session, scheduleTicks } from '../src/index.js';
@@ -8,6 +9,7 @@ import {
   parseClientMessage,
   CONTENT,
   VERSION,
+  type ClientMessage,
   type JoinMessage,
   type PublicState,
   type ServerMessage,
@@ -16,11 +18,11 @@ import {
 
 const MAX_PLAYERS = 8;
 const MAX_ROOMS = 64;
-const COMMAND_BACKLOG = 12;
-const REPEAT_TICKS = 3;
+const COMMAND_BACKLOG = 12; // queued commands per client before the oldest are dropped
+const REPEAT_TICKS = 3; // ticks a late client's last command is repeated before it counts as idle
 const SCENE_CHANGE_COOLDOWN_MS = 1000;
 const MESSAGES_PER_SECOND = 150;
-const SEND_BUFFER_LIMIT = 1024 * 1024;
+const SEND_BUFFER_LIMIT = 1024 * 1024; // bytes queued to a socket before its client is too slow
 const HEARTBEAT_MS = 30_000;
 const ROOM_NAME = /^[a-zA-Z0-9_-]{1,32}$/;
 
@@ -28,16 +30,17 @@ interface Client {
   socket: WebSocket;
   id: string;
   slot: number;
-  commands: CommandQueue<Command>;
-  replicator: Replicator<PublicState>;
+  commands: CommandQueue<Command>; // buffers this client's numbered commands until a tick takes one
+  replicator: Replicator<PublicState>; // knows what this client last saw, to send only changes
 }
 
 class Room {
   readonly clients = new Map<WebSocket, Client>();
+  // Session owns the current DemoSimulation plus the state that survives scene changes.
   readonly session = new Session({ changes: 0 }, (scene) => new DemoSimulation(scene), 'workshop');
   emptySince = Date.now();
   private stop?: () => void;
-  private events: Snapshot['events'] = [];
+  private events: Snapshot['events'] = []; // announcements to include in the next snapshot
   private lastChange = -Infinity;
 
   constructor(readonly password: string) {}
@@ -54,10 +57,12 @@ class Room {
     };
     this.session.level.join(client.id, slot);
     this.clients.set(socket, client);
+    // The first player starts the tick loop; leave() stops it again when the room empties.
     this.stop ??= scheduleTicks(TPS, () => this.tick());
     return client;
   }
 
+  // Slots are reused, so player ids stay short and spawn positions stay close together.
   private freeSlot(): number {
     const taken = new Set([...this.clients.values()].map((client) => client.slot));
     let slot = 0;
@@ -87,6 +92,7 @@ class Room {
     this.emptySince = Date.now();
   }
 
+  // Builds the new level, bumps the epoch and re-adds every player to it.
   change(scene: string): void {
     if (Date.now() - this.lastChange < SCENE_CHANGE_COOLDOWN_MS)
       throw new Error('Wait a moment before changing scenes');
@@ -94,13 +100,14 @@ class Room {
     this.session.change(scene);
     this.session.state.changes++;
     for (const client of this.clients.values()) {
-      client.commands.clear();
-      client.replicator.reset();
+      client.commands.clear(); // input meant for the old scene must not run in the new one
+      client.replicator.reset(); // the next snapshot carries the full state instead of a patch
       this.session.level.join(client.id, client.slot);
     }
     this.events.push({ type: 'scene', scene });
   }
 
+  // One authoritative tick: take one command per client, step, then send each client its own patch.
   tick(): void {
     const level = this.session.level;
     const commands = new Map(
@@ -115,8 +122,8 @@ class Room {
         tick: level.tick,
         scene: level.scene,
         changes: this.session.state.changes,
-        ack: client.commands.applied,
-        patch: client.replicator.encode(publicState),
+        ack: client.commands.applied, // lets the client drop predictions the server has confirmed
+        patch: client.replicator.encode(publicState), // only what changed for this client
         events: this.events,
       });
     }
@@ -170,6 +177,7 @@ export async function startServer(port = 3000, host = '127.0.0.1', roomTtlMs = 6
   const websocket = new WebSocketServer({ server: http, path: '/ws', maxPayload: 4096 });
   const alive = new Set<WebSocket>();
 
+  // Decides which room a join leads to, creating it when asked.
   function admit(message: JoinMessage): Room {
     if (message.version !== VERSION) throw new Error('Version mismatch; reload');
     if (message.content !== CONTENT) throw new Error('Scene content mismatch; reload');
@@ -199,8 +207,9 @@ export async function startServer(port = 3000, host = '127.0.0.1', roomTtlMs = 6
         socket.close(1008, 'Message limit exceeded');
         return;
       }
+      let message: ClientMessage | undefined;
       try {
-        const message = parseClientMessage(String(raw));
+        message = parseClientMessage(String(raw));
         if (message.type === 'join') {
           if (client) throw new Error('Already joined');
           room = admit(message);
@@ -209,6 +218,7 @@ export async function startServer(port = 3000, host = '127.0.0.1', roomTtlMs = 6
         } else if (!room || !client) {
           throw new Error('Join a room first');
         } else if (message.type === 'command') {
+          // Commands sent before a scene change carry the old epoch and are dropped.
           if (message.epoch === room.session.epoch)
             client.commands.push(message.sequence, message.command);
         } else {
@@ -217,6 +227,8 @@ export async function startServer(port = 3000, host = '127.0.0.1', roomTtlMs = 6
       } catch (error) {
         const text = error instanceof Error ? error.message : 'Invalid message';
         send(socket, { type: 'error', message: text });
+        // The queue is full, so this client ran far ahead; close instead of losing input silently.
+        if (message?.type === 'command') socket.close(1008, text);
       }
     });
     socket.on('close', () => {
@@ -226,12 +238,14 @@ export async function startServer(port = 3000, host = '127.0.0.1', roomTtlMs = 6
     socket.on('error', () => socket.close());
   });
 
+  // Pings idle sockets and drops those that did not answer the previous ping.
   const heartbeat = setInterval(() => {
     for (const socket of websocket.clients) {
       if (alive.delete(socket)) socket.ping();
       else socket.terminate();
     }
   }, HEARTBEAT_MS);
+  // Frees rooms that have stayed empty for longer than the TTL.
   const sweep = setInterval(
     () => {
       for (const [name, room] of rooms) {
