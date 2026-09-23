@@ -1,3 +1,5 @@
+// The authoritative game: builds a Rapier world from a scene and steps it once per tick.
+// The server runs one per room; local mode runs one directly in the browser.
 import {
   Entities,
   Hasher,
@@ -11,11 +13,11 @@ import { PLAYER_SIZE, getScene, registry, type WorkshopObject } from './scene.js
 import { TPS, idle, move, type Command } from './movement.js';
 import type { PublicState } from './protocol.js';
 
-const SLOT_SPACING = 1.5;
+const SLOT_SPACING = 1.5; // meters between players at the spawn point
 
 interface Player {
-  position: Vector;
-  physics: PhysicsObject;
+  position: Vector; // the authoritative position, moved by commands
+  physics: PhysicsObject; // a kinematic body that follows it, so it can push boxes
 }
 type Block = Exclude<WorkshopObject, { type: 'spawn' }>;
 
@@ -23,13 +25,16 @@ export class DemoSimulation {
   readonly physics: PhysicsWorld;
   readonly players = new Map<string, Player>();
   readonly objects = new Map<string, PhysicsObject>();
+  // Entities holds the scene objects by id and disposes them in a fixed order.
   readonly entities = new Entities<{ dispose(): void }>();
+  // Simulation runs named phases in a fixed order every tick; that order is part of determinism.
   readonly simulation: Simulation<ReadonlyMap<string, Command>>;
   private readonly spawn: Vector;
   tick = 0;
 
   constructor(readonly scene: string) {
     const document = getScene(scene);
+    // expand() runs the generators and returns plain objects, settings typed by their schema.
     const objects = registry.expand(document);
     const spawn = objects.find((entry) => entry.type === 'spawn');
     if (!spawn) throw new Error(`${scene} has no spawn point`);
@@ -40,15 +45,16 @@ export class DemoSimulation {
     }
     this.simulation = new Simulation(
       [
-        { name: 'movement', run: (commands) => this.movePlayers(commands) },
-        { name: 'objects', run: () => this.entities.update() },
-        { name: 'physics', run: () => this.physics.step() },
+        { name: 'movement', run: (commands) => this.movePlayers(commands) }, // this tick's input
+        { name: 'objects', run: () => this.entities.update() }, // per-object behavior, in id order
+        { name: 'physics', run: () => this.physics.step() }, // one Rapier step
         { name: 'tick', run: () => this.tick++ },
       ],
-      () => this.release(),
+      () => this.release(), // runs once when the simulation is disposed
     );
   }
 
+  // One Rapier cuboid per block: a dynamic body for boxes, a bare collider for ground.
   private place(entry: Block): void {
     const { position, rotation, size } = entry.settings;
     const collider = RAPIER.ColliderDesc.cuboid(size.x / 2, size.y / 2, size.z / 2);
@@ -58,27 +64,15 @@ export class DemoSimulation {
     if (rotation) placed.setRotation(toQuaternion(rotation));
     const physics = this.physics.add(body, [collider]);
     this.objects.set(entry.id, physics);
+    // Registering with Entities ties the physics object's lifetime to the scene object's id.
     this.entities.add({ dispose: () => this.physics.remove(physics) }, entry.id);
-  }
-
-  private movePlayers(commands: ReadonlyMap<string, Command>): void {
-    for (const id of [...this.players.keys()].sort()) {
-      const player = this.players.get(id)!;
-      move(player.position, commands.get(id) ?? idle());
-      player.physics.body!.setNextKinematicTranslation(player.position);
-    }
-  }
-
-  private release(): void {
-    this.entities.dispose();
-    this.players.clear();
-    this.objects.clear();
-    this.physics.dispose();
   }
 
   join(id: string, slot: number): void {
     if (this.players.has(id)) return;
+    // Players line up along x from the spawn point, one slot each.
     const position = { ...this.spawn, x: this.spawn.x + slot * SLOT_SPACING };
+    // A kinematic body ignores gravity and collisions itself, but still pushes dynamic boxes aside.
     const body = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(
       position.x,
       position.y,
@@ -98,6 +92,21 @@ export class DemoSimulation {
     this.players.delete(id);
   }
 
+  // Sorted ids guarantee every machine applies the same commands in the same order.
+  private movePlayers(commands: ReadonlyMap<string, Command>): void {
+    for (const id of [...this.players.keys()].sort()) {
+      const player = this.players.get(id)!;
+      move(player.position, commands.get(id) ?? idle());
+      // The body travels to the new position during the physics step, pushing boxes on the way.
+      player.physics.body!.setNextKinematicTranslation(player.position);
+    }
+  }
+
+  step(commands: ReadonlyMap<string, Command>): void {
+    this.simulation.step(commands);
+  }
+
+  // Everything a client may see. Whatever is not projected here stays on the server.
   state(): PublicState {
     const state: PublicState = {};
     for (const [id, player] of this.players) {
@@ -108,7 +117,7 @@ export class DemoSimulation {
       };
     }
     for (const [id, physics] of this.objects) {
-      if (!physics.body) continue;
+      if (!physics.body) continue; // ground never moves, so clients build it from the scene file
       const { x, y, z } = physics.body.translation();
       const rotation = physics.body.rotation();
       state[id] = {
@@ -120,6 +129,8 @@ export class DemoSimulation {
     return state;
   }
 
+  // Fingerprint of the whole tick: the counter, the public state and the raw Rapier snapshot.
+  // Two runs fed the same commands must hash identically; replay verification depends on that.
   hash(): number {
     return new Hasher()
       .int(this.tick)
@@ -128,8 +139,11 @@ export class DemoSimulation {
       .digest();
   }
 
-  step(commands: ReadonlyMap<string, Command>): void {
-    this.simulation.step(commands);
+  private release(): void {
+    this.entities.dispose();
+    this.players.clear();
+    this.objects.clear();
+    this.physics.dispose();
   }
 
   dispose(): void {

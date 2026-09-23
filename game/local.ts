@@ -1,3 +1,4 @@
+// Local mode: the simulation runs in this browser tab, so there is no network and no prediction.
 import { FixedClock, Session } from '../src/index.js';
 import { initPhysics } from '../src/physics.js';
 import { TPS, type Command } from './movement.js';
@@ -6,11 +7,14 @@ import { DemoSimulation } from './simulation.js';
 import type { DemoView } from './view.js';
 
 export class LocalClient {
+  // Session keeps state that survives scene changes and swaps the level underneath it.
   readonly session: Session<{ changes: number }, DemoSimulation>;
+  // FixedClock turns uneven frame times into whole ticks; the leftover fraction is alpha.
   private readonly clock = new FixedClock(1000 / TPS);
-  private previous: PublicState;
-  private current: PublicState;
+  private previous: PublicState; // state after the previous tick
+  private current: PublicState; // state after the latest tick
 
+  // Rapier's WebAssembly must be initialized before any simulation is constructed.
   static async create(
     view: DemoView,
     playerId: string,
@@ -42,6 +46,7 @@ export class LocalClient {
     return this.session.level.state();
   }
 
+  // Runs the ticks the elapsed time covers, then draws between the last two states.
   frame(elapsedMs: number, readInput: () => Command): void {
     const alpha = this.clock.advance(elapsedMs, () => this.step(readInput()));
     this.view.draw(this.previous, this.current, alpha, this.playerId);
@@ -53,6 +58,7 @@ export class LocalClient {
     this.current = this.session.level.state();
   }
 
+  // Session.change() builds the new level, bumps the epoch and disposes the old level.
   change(scene: string): void {
     this.session.change(scene);
     this.session.state.changes++;

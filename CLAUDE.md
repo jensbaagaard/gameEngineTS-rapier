@@ -5,7 +5,7 @@ The engine must be of the highest quality with the minimum amount of code. That 
 ## Code
 
 - Keep the codebase minimal. Every line must earn its place.
-- No comments. Names and structure carry the meaning.
+- No comments in the engine (`src/`). Names and structure carry the meaning. The demo game (`game/`) may use short single-line comments that explain how it uses the engine.
 - Strike the balance between clean, readable code and the fewest lines. Neither wins alone.
 - Delete what a change makes unnecessary: dead code, no-op overrides, indirection that no longer pays for itself.
 

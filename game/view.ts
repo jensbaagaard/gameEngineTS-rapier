@@ -1,3 +1,4 @@
+// The browser side: Three.js meshes built from the same expanded scene the simulation uses.
 import {
   AmbientLight,
   BoxGeometry,
@@ -18,12 +19,14 @@ import type { Pose, PublicState } from './protocol.js';
 import { PLAYER_SIZE, getScene, registry } from './scene.js';
 
 const PLAYER_COLORS = { self: '#3478ba', other: '#aa496c' };
+// Reused every frame so drawing does not allocate.
 const scratchQuaternion = new Quaternion();
 const scratchPosition = new Vector3();
 
 export class DemoView {
   readonly scene = new Scene();
   readonly camera = new PerspectiveCamera(55, 1, 0.1, 100);
+  // RenderObjects keeps meshes by id and frees their GPU resources when they are removed.
   readonly visuals: RenderObjects;
   private readonly listeners = new AbortController();
   private sceneId = '';
@@ -52,6 +55,7 @@ export class DemoView {
     return this.sceneId;
   }
 
+  // Rebuilds the scene from the same expand() the simulation uses, so meshes match colliders.
   load(id: string): void {
     const document = getScene(id);
     this.visuals.dispose();
@@ -72,6 +76,8 @@ export class DemoView {
     return new Mesh(geometry, new MeshStandardMaterial({ color, roughness: 0.8 }));
   }
 
+  // Draws one frame between two snapshots; alpha is how far we are from `from` towards `to`.
+  // The local player is drawn at its predicted position instead of the interpolated one.
   draw(
     from: PublicState,
     to: PublicState,
@@ -83,7 +89,7 @@ export class DemoView {
     for (const [id, pose] of Object.entries(to)) {
       const mesh = this.visuals.objects.get(id) ?? this.addPlayer(id, pose, playerId);
       if (!mesh) continue;
-      const previous = from[id] ?? pose;
+      const previous = from[id] ?? pose; // something that just appeared has no earlier pose
       mesh.position.copy(previous.position).lerp(scratchPosition.copy(pose.position), alpha);
       mesh.quaternion.copy(previous.rotation).slerp(scratchQuaternion.copy(pose.rotation), alpha);
       if (id === playerId && predicted) mesh.position.copy(predicted);
@@ -91,12 +97,14 @@ export class DemoView {
     this.render();
   }
 
+  // Players leave the public state when they disconnect; scene objects only change via load().
   private removeDepartedPlayers(state: PublicState): void {
     for (const id of this.visuals.objects.keys()) {
       if (id.startsWith('player:') && !Object.hasOwn(state, id)) this.visuals.remove(id);
     }
   }
 
+  // Players are not in the scene file, so their meshes are created the first time they appear.
   private addPlayer(id: string, pose: Pose, playerId?: string): Mesh | undefined {
     if (pose.type !== 'player') return;
     const color = id === playerId ? PLAYER_COLORS.self : PLAYER_COLORS.other;
