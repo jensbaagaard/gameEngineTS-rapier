@@ -38,6 +38,7 @@ This branch updates **only the engine repository**. Checked items are implemente
 - [x] Record commands and verify replay fingerprints with build/scene identity checks.
 - [x] Include complete physics snapshots in the workshop fingerprint.
 - [x] Compare identical physics command streams in Node and Chromium; keep a fixed regression fingerprint.
+- [ ] `toQuaternion` is the only trigonometry in the simulation. Confirm `Math.sin`/`Math.cos` agree across supported browsers or store quaternions in scene data.
 - [ ] Establish the supported cross-platform determinism envelope. CI covers three desktop OSes, but browser/CPU/backend coverage is not universal and game code must also be deterministic.
 
 ## Physics

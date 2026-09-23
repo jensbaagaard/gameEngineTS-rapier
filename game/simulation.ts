@@ -1,6 +1,13 @@
-import { Entities, Hasher, Simulation, canonical } from '../src/index.js';
+import {
+  Entities,
+  Hasher,
+  Simulation,
+  canonical,
+  toQuaternion,
+  type Vector,
+} from '../src/index.js';
 import { PhysicsWorld, RAPIER, type PhysicsObject } from '../src/physics.js';
-import { PLAYER_SIZE, getScene, registry, type Vector, type WorkshopObject } from './scene.js';
+import { PLAYER_SIZE, getScene, registry, type WorkshopObject } from './scene.js';
 import { TPS, idle, move, type Command } from './movement.js';
 import type { PublicState } from './protocol.js';
 
@@ -43,13 +50,12 @@ export class DemoSimulation {
   }
 
   private place(entry: Block): void {
-    const { position, size } = entry.settings;
+    const { position, rotation, size } = entry.settings;
     const collider = RAPIER.ColliderDesc.cuboid(size.x / 2, size.y / 2, size.z / 2);
-    const dynamic = entry.type === 'box';
-    const body = dynamic
-      ? RAPIER.RigidBodyDesc.dynamic().setTranslation(position.x, position.y, position.z)
-      : undefined;
-    if (!dynamic) collider.setTranslation(position.x, position.y, position.z);
+    const body = entry.type === 'box' ? RAPIER.RigidBodyDesc.dynamic() : undefined;
+    const placed = body ?? collider;
+    placed.setTranslation(position.x, position.y, position.z);
+    if (rotation) placed.setRotation(toQuaternion(rotation));
     const physics = this.physics.add(body, [collider]);
     this.objects.set(entry.id, physics);
     this.entities.add({ dispose: () => this.physics.remove(physics) }, entry.id);

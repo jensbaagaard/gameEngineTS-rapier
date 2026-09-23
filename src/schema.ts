@@ -128,6 +128,7 @@ function validateString(schema: Shape<'string'>, value: string, path: string): v
 
 export const number = { type: 'number' } as const satisfies Schema;
 export const meters = { type: 'number', unit: 'm' } as const satisfies Schema;
+export const degrees = { type: 'number', unit: '°' } as const satisfies Schema;
 export const integer = { type: 'number', integer: true } as const satisfies Schema;
 export const string = { type: 'string' } as const satisfies Schema;
 export const boolean = { type: 'boolean' } as const satisfies Schema;

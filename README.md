@@ -59,24 +59,32 @@ The package is private and is not published. Build it before consuming it as a l
 `SceneRegistry` takes explicit named object and generator definitions. A `SceneDocument` is versioned JSON containing an id, scene-wide settings, and objects with stable ids, types and settings. A generator additionally has a seed. Schemas describe nested values, limits, optional fields, enums and units for a future editor. They also carry types: `validate()` narrows a value to `Infer<typeof schema>`, and `expand()` returns objects whose `settings` are typed by their registered schema, so game code reads settings without casts.
 
 ```ts
-import { SceneRegistry, meters, object } from '@sneakpeak/engine';
+import { SceneRegistry, meters, object, transform } from '@sneakpeak/engine';
 
 const registry = new SceneRegistry({
-  wall: object({ width: { ...meters, min: 0.1 } }),
+  wall: object({ ...transform, width: { ...meters, min: 0.1 } }),
 });
 const scene = registry.parse({
   version: 1,
   id: 'yard',
   settings: {},
-  objects: [{ id: 'north-wall', type: 'wall', settings: { width: 12 } }],
+  objects: [
+    {
+      id: 'north-wall',
+      type: 'wall',
+      settings: { position: { x: 0, y: 1, z: -6 }, rotation: { x: 0, y: 90, z: 0 }, width: 12 },
+    },
+  ],
 });
 const objects = registry.expand(scene);
 const json = registry.serialize(scene);
 ```
 
+`transform` gives an object a position in meters and an optional rotation in degrees, applied in XYZ order. `toQuaternion(rotation)` turns those degrees into the quaternion Rapier and Three.js consume, so physics and visuals cannot disagree about where an object points.
+
 `parse` validates authored data. `expand` also runs and validates generators; child ids are namespaced as `generator-id/child-id`. `bake(scene, id)` replaces one generator with its ordinary objects without changing expanded ids, order or settings. Generators are trusted game code, must be pure apart from the supplied random stream, and must not depend on registration order, wall time or `Math.random()`.
 
-The workshop builds physics and visuals from the same expanded settings, in meters. Gravity, background and ordinary spawn objects are scene data. There is no per-object sharing flag: privacy comes from server-only construction and an explicit public-state projection. Anything in a client-loaded scene, including a generator seed, is public. Secret mine placement must never use a public seed.
+The workshop builds physics and visuals from the same expanded settings, in meters and degrees. Gravity, background and ordinary spawn objects are scene data. There is no per-object sharing flag: privacy comes from server-only construction and an explicit public-state projection. Anything in a client-loaded scene, including a generator seed, is public. Secret mine placement must never use a public seed.
 
 ### Simulation and lifetime
 

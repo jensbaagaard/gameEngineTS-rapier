@@ -286,6 +286,7 @@ Every client message is validated with the same `Schema` machinery that validate
 | --------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------- |
 | `src/schema.ts`                               | `validate(schema, value)` narrows to `Infer<typeof schema>`                      | adding a setting or message field                 |
 | `src/scene.ts`                                | `SceneRegistry`: parse, expand, bake, serialize                                  | adding an object type or generator                |
+| `src/transform.ts`                            | `vector`, `rotation`, `transform` schemas and `toQuaternion`                     | placing or orienting objects                      |
 | `src/simulation.ts`                           | `Simulation` (ordered phases), `Entities` (id-ordered update, disposal)          | changing what happens inside a tick               |
 | `src/clock.ts`                                | `FixedClock` (accumulator), `scheduleTicks` (self-correcting timer)              | timing and catch-up behavior                      |
 | `src/session.ts`                              | `Session`: persistent state + swappable level + epoch                            | scene transitions                                 |

@@ -1,24 +1,23 @@
 import {
   SceneRegistry,
   integer,
-  meters,
   number,
   object,
   string,
-  type Infer,
+  transform,
+  vector,
   type Schema,
+  type Vector,
 } from '../src/index.js';
 import workshop from './workshop.json';
 import courtyard from './courtyard.json';
 
-export const vector = object({ x: meters, y: meters, z: meters });
-export type Vector = Infer<typeof vector>;
 export const PLAYER_SIZE: Vector = { x: 0.9, y: 1.5, z: 0.9 };
 
 const positive = { type: 'number', min: 0.01, max: 100, unit: 'm' } as const satisfies Schema;
 const size = object({ x: positive, y: positive, z: positive });
 const acceleration = { type: 'number', unit: 'm/s²' } as const satisfies Schema;
-const block = object({ position: vector, size, color: string });
+const block = object({ ...transform, size, color: string });
 
 export const registry = new SceneRegistry(
   {

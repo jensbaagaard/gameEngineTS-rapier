@@ -4,7 +4,7 @@ import { chromium, type Page } from 'playwright';
 import { createServer } from 'vite';
 import { startServer } from '../game/server.js';
 import { DemoSimulation } from '../game/simulation.js';
-import { registry } from '../game/scene.js';
+import { registry, scenes } from '../game/scene.js';
 
 const server = await startServer(0);
 const vite = await createServer({
@@ -149,7 +149,7 @@ try {
     baked.objects.some((entry) => 'seed' in entry),
     false,
   );
-  assert.equal(registry.expand(baked).length, 14);
+  assert.deepEqual(registry.expand(baked), registry.expand(scenes.workshop));
   await preview.screenshot({ path: 'evidence/browser/preview.jpg', type: 'jpeg', quality: 85 });
 
   const a = await open('&online');

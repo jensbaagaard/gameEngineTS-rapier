@@ -5,6 +5,7 @@
   "objects": [
     { "id": "floor", "type": "ground", "settings": { "position": { "x": 0, "y": -0.25, "z": 0 }, "size": { "x": 24, "y": 0.5, "z": 24 }, "color": "#819c8a" } },
     { "id": "arrival", "type": "spawn", "settings": { "position": { "x": 0, "y": 0.75, "z": 6 } } },
-    { "id": "stack", "type": "boxes", "seed": 7, "settings": { "count": 12, "spread": 4 } }
+    { "id": "stack", "type": "boxes", "seed": 7, "settings": { "count": 12, "spread": 4 } },
+    { "id": "ramp", "type": "ground", "settings": { "position": { "x": -7.5, "y": 0.9, "z": -3 }, "rotation": { "x": 0, "y": 0, "z": -20 }, "size": { "x": 6, "y": 0.5, "z": 5 }, "color": "#6f8f83" } }
   ]
 }

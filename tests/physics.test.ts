@@ -85,6 +85,18 @@ describe('physics ownership', () => {
       physics.dispose();
     }
   });
+  it('places scene objects with their authored rotation', () => {
+    const sim = new DemoSimulation('workshop');
+    try {
+      const { x, y, z, w } = sim.objects.get('ramp')!.colliders[0]!.rotation();
+      const halfAngle = (-10 * Math.PI) / 180;
+      expect([x, y]).toEqual([0, 0]);
+      expect(z).toBeCloseTo(Math.sin(halfAngle), 6);
+      expect(w).toBeCloseTo(Math.cos(halfAngle), 6);
+    } finally {
+      sim.dispose();
+    }
+  });
   it('hashes the entire physics world identically for the same commands', () => {
     const run = () => {
       const sim = new DemoSimulation('workshop');
@@ -103,7 +115,7 @@ describe('physics ownership', () => {
     const hashes = run();
     expect(hashes).toEqual(run());
     expect(hashes.filter((_, index) => (index + 1) % 30 === 0)).toEqual([
-      0x50ca586f, 0xbc1a7958, 0x95a7f15e, 0xf7231ce0, 0x9c07595d, 0x6e9a92df,
+      0x6abb3ad3, 0x75411985, 0xec8efbef, 0x194316b2, 0x4f81419b, 0xd26aac18,
     ]);
   });
 });

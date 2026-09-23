@@ -1,5 +1,4 @@
-import { object, number, type Infer } from '../src/index.js';
-import type { Vector } from './scene.js';
+import { object, number, type Infer, type Vector } from '../src/index.js';
 
 export const TPS = 60;
 const SPEED = 5;

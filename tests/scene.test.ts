@@ -1,5 +1,6 @@
+import { Euler, Quaternion } from 'three';
 import { describe, expect, it } from 'vitest';
-import { SceneRegistry, array, integer, object, validate } from '../src/index.js';
+import { SceneRegistry, array, integer, object, toQuaternion, validate } from '../src/index.js';
 import { registry, scenes } from '../game/scene.js';
 
 describe('scene documents', () => {
@@ -82,5 +83,19 @@ describe('scene documents', () => {
         objects: [{ id: 'generator', type: 'boxes', settings: {}, seed: 1 }],
       }),
     ).toThrow('Invalid scene object');
+  });
+});
+
+describe('transforms', () => {
+  it('converts degrees to the quaternion Three.js derives from the same XYZ Euler angles', () => {
+    expect(toQuaternion({ x: 0, y: 0, z: 0 })).toEqual({ x: 0, y: 0, z: 0, w: 1 });
+    const radians = (degrees: number) => (degrees * Math.PI) / 180;
+    const three = new Quaternion().setFromEuler(new Euler(radians(30), radians(-45), radians(120)));
+    expect(toQuaternion({ x: 30, y: -45, z: 120 })).toEqual({
+      x: expect.closeTo(three.x, 12),
+      y: expect.closeTo(three.y, 12),
+      z: expect.closeTo(three.z, 12),
+      w: expect.closeTo(three.w, 12),
+    });
   });
 });

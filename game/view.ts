@@ -13,8 +13,9 @@ import {
   type WebGPURenderer,
 } from 'three/webgpu';
 import { RenderObjects } from '../src/browser.js';
+import { toQuaternion, type Vector } from '../src/index.js';
 import type { Pose, PublicState } from './protocol.js';
-import { PLAYER_SIZE, getScene, registry, type Vector } from './scene.js';
+import { PLAYER_SIZE, getScene, registry } from './scene.js';
 
 const PLAYER_COLORS = { self: '#3478ba', other: '#aa496c' };
 const scratchQuaternion = new Quaternion();
@@ -58,9 +59,10 @@ export class DemoView {
     this.scene.background = new Color(document.settings.background);
     for (const entry of registry.expand(document)) {
       if (entry.type === 'spawn') continue;
-      const { position, size, color } = entry.settings;
+      const { position, rotation, size, color } = entry.settings;
       const mesh = this.mesh(size, color);
       mesh.position.copy(position);
+      if (rotation) mesh.quaternion.copy(toQuaternion(rotation));
       this.visuals.add(entry.id, mesh);
     }
   }

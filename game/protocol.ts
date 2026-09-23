@@ -9,16 +9,17 @@ import {
   validate,
   type Infer,
   type Patch,
+  type Quaternion,
   type Schema,
+  type Vector,
 } from '../src/index.js';
 import { commandSchema } from './movement.js';
-import { registry, scenes, type Vector } from './scene.js';
+import { registry, scenes } from './scene.js';
 
 export const VERSION = 1;
 export const CONTENT = fingerprint();
 
-export type Rotation = { x: number; y: number; z: number; w: number };
-export type Pose = { type: 'player' | 'box'; position: Vector; rotation: Rotation };
+export type Pose = { type: 'player' | 'box'; position: Vector; rotation: Quaternion };
 export type PublicState = Record<string, Pose>;
 
 const nonnegative = { ...integer, min: 0 } as const satisfies Schema;

@@ -1,4 +1,11 @@
-import { FixedClock, Prediction, Replica, SnapshotBuffer, TickInbox } from '../src/index.js';
+import {
+  FixedClock,
+  Prediction,
+  Replica,
+  SnapshotBuffer,
+  TickInbox,
+  type Vector,
+} from '../src/index.js';
 import { TPS, move, type Command } from './movement.js';
 import {
   CONTENT,
@@ -10,7 +17,6 @@ import {
   type Snapshot,
   type Welcome,
 } from './protocol.js';
-import type { Vector } from './scene.js';
 import type { DemoView } from './view.js';
 
 const RENDER_DELAY_TICKS = 2;

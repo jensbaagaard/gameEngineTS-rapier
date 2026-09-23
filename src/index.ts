@@ -1,5 +1,6 @@
 export * from './schema.js';
 export * from './scene.js';
+export * from './transform.js';
 export * from './random.js';
 export * from './hash.js';
 export * from './simulation.js';
