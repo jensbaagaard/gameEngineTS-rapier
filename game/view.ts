@@ -13,6 +13,7 @@ import {
   Vector3,
   type WebGPURenderer,
 } from 'three/webgpu';
+import type { Models } from '../src/assets.js';
 import { RenderObjects } from '../src/browser.js';
 import { toQuaternion, type Vector } from '../src/index.js';
 import type { Pose, PublicState } from './protocol.js';
@@ -26,19 +27,23 @@ const scratchPosition = new Vector3();
 export class DemoView {
   readonly scene = new Scene();
   readonly camera = new PerspectiveCamera(55, 1, 0.1, 100);
-  // RenderObjects keeps meshes by id and frees their GPU resources when they are removed.
+  // RenderObjects keeps meshes by id and frees their GPU resources when they are removed,
+  // except model geometry, which Models owns and shares across scenes.
   readonly visuals: RenderObjects;
   private readonly listeners = new AbortController();
   private sceneId = '';
 
-  constructor(readonly renderer: WebGPURenderer) {
+  constructor(
+    readonly renderer: WebGPURenderer,
+    private readonly models: Models,
+  ) {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     const light = new DirectionalLight(0xffffff, 3);
     light.position.set(6, 12, 8);
     this.scene.add(light, new AmbientLight(0xffffff, 2));
     const root = new Group();
     this.scene.add(root);
-    this.visuals = new RenderObjects(root);
+    this.visuals = new RenderObjects(root, models.geometries);
     this.camera.position.set(17, 19, 23);
     this.camera.lookAt(0, 0, 0);
     window.addEventListener('resize', () => this.resize(), { signal: this.listeners.signal });
@@ -63,8 +68,11 @@ export class DemoView {
     this.scene.background = new Color(document.settings.background);
     for (const entry of registry.expand(document)) {
       if (entry.type === 'spawn') continue;
-      const { position, rotation, size, color } = entry.settings;
-      const mesh = this.mesh(size, color);
+      const mesh =
+        entry.type === 'prop'
+          ? this.prop(entry.settings.model, entry.settings.scale)
+          : this.mesh(entry.settings.size, entry.settings.color);
+      const { position, rotation } = entry.settings;
       mesh.position.copy(position);
       if (rotation) mesh.quaternion.copy(toQuaternion(rotation));
       this.visuals.add(entry.id, mesh);
@@ -74,6 +82,14 @@ export class DemoView {
   private mesh(size: Vector, color: string): Mesh {
     const geometry = new BoxGeometry(size.x, size.y, size.z);
     return new Mesh(geometry, new MeshStandardMaterial({ color, roughness: 0.8 }));
+  }
+
+  // Model colours were baked into the vertices when the file was loaded.
+  private prop(model: string, scale: number): Mesh {
+    const material = new MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
+    const mesh = new Mesh(this.models.get(model).geometry, material);
+    mesh.scale.setScalar(scale);
+    return mesh;
   }
 
   // Draws one frame between two snapshots; alpha is how far we are from `from` towards `to`.

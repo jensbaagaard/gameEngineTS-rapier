@@ -18,3 +18,14 @@ it('keeps shared GPU resources until the last visual is removed', () => {
   for (const free of frees) expect(free).toHaveBeenCalledTimes(1);
   expect(objects.root.children).toHaveLength(0);
 });
+
+it('leaves shared resources to their owner', () => {
+  const shared = new BoxGeometry();
+  const free = vi.spyOn(shared, 'dispose');
+  const objects = new RenderObjects(new Group(), new Set([shared]));
+  objects.add('a', new Mesh(shared, new MeshStandardMaterial()));
+  objects.remove('a');
+  objects.add('b', new Mesh(shared, new MeshStandardMaterial()));
+  objects.dispose();
+  expect(free).not.toHaveBeenCalled();
+});

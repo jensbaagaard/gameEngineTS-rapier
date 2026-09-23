@@ -9,6 +9,7 @@ import {
   type Vector,
 } from '../src/index.js';
 import { PhysicsWorld, RAPIER, type PhysicsObject } from '../src/physics.js';
+import type { Models } from '../src/assets.js';
 import { PLAYER_SIZE, getScene, registry, type WorkshopObject } from './scene.js';
 import { TPS, idle, move, type Command } from './movement.js';
 import type { PublicState } from './protocol.js';
@@ -19,7 +20,7 @@ interface Player {
   position: Vector; // the authoritative position, moved by commands
   physics: PhysicsObject; // a kinematic body that follows it, so it can push boxes
 }
-type Block = Exclude<WorkshopObject, { type: 'spawn' }>;
+type Solid = Exclude<WorkshopObject, { type: 'spawn' }>;
 
 export class DemoSimulation {
   readonly physics: PhysicsWorld;
@@ -32,7 +33,10 @@ export class DemoSimulation {
   private readonly spawn: Vector;
   tick = 0;
 
-  constructor(readonly scene: string) {
+  constructor(
+    readonly scene: string,
+    private readonly models: Models,
+  ) {
     const document = getScene(scene);
     // expand() runs the generators and returns plain objects, settings typed by their schema.
     const objects = registry.expand(document);
@@ -54,10 +58,10 @@ export class DemoSimulation {
     );
   }
 
-  // One Rapier cuboid per block: a dynamic body for boxes, a bare collider for ground.
-  private place(entry: Block): void {
-    const { position, rotation, size } = entry.settings;
-    const collider = RAPIER.ColliderDesc.cuboid(size.x / 2, size.y / 2, size.z / 2);
+  // One Rapier collider per object: a dynamic body for boxes, a bare collider for the rest.
+  private place(entry: Solid): void {
+    const { position, rotation } = entry.settings;
+    const collider = this.shape(entry);
     const body = entry.type === 'box' ? RAPIER.RigidBodyDesc.dynamic() : undefined;
     const placed = body ?? collider;
     placed.setTranslation(position.x, position.y, position.z);
@@ -66,6 +70,19 @@ export class DemoSimulation {
     this.objects.set(entry.id, physics);
     // Registering with Entities ties the physics object's lifetime to the scene object's id.
     this.entities.add({ dispose: () => this.physics.remove(physics) }, entry.id);
+  }
+
+  // Blocks are cuboids; a prop's hull comes from the same model file the view draws, scaled alike.
+  private shape(entry: Solid): RAPIER.ColliderDesc {
+    if (entry.type !== 'prop') {
+      const { size } = entry.settings;
+      return RAPIER.ColliderDesc.cuboid(size.x / 2, size.y / 2, size.z / 2);
+    }
+    const { model, scale } = entry.settings;
+    const points = this.models.get(model).positions.map((value) => value * scale);
+    const hull = RAPIER.ColliderDesc.convexHull(points);
+    if (!hull) throw new Error(`${entry.id}: ${model} has no convex hull`);
+    return hull;
   }
 
   join(id: string, slot: number): void {

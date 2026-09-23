@@ -1,4 +1,5 @@
 // Local mode: the simulation runs in this browser tab, so there is no network and no prediction.
+import type { Models } from '../src/assets.js';
 import { FixedClock, Session } from '../src/index.js';
 import { initPhysics } from '../src/physics.js';
 import { TPS, type Command } from './movement.js';
@@ -17,16 +18,18 @@ export class LocalClient {
   // Rapier's WebAssembly must be initialized before any simulation is constructed.
   static async create(
     view: DemoView,
+    models: Models,
     playerId: string,
     scene: string,
     status: (text: string) => void,
   ): Promise<LocalClient> {
     await initPhysics();
-    return new LocalClient(view, playerId, scene, status);
+    return new LocalClient(view, models, playerId, scene, status);
   }
 
   private constructor(
     private readonly view: DemoView,
+    private readonly models: Models,
     readonly playerId: string,
     scene: string,
     private readonly status: (text: string) => void,
@@ -37,7 +40,7 @@ export class LocalClient {
   }
 
   private load(scene: string): DemoSimulation {
-    const simulation = new DemoSimulation(scene);
+    const simulation = new DemoSimulation(scene, this.models);
     simulation.join(this.playerId, 0);
     return simulation;
   }

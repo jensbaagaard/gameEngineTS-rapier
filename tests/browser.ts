@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile } from 'node:fs/promises';
 import { chromium, type Page } from 'playwright';
 import { createServer } from 'vite';
+import { Models } from '../src/assets.js';
 import { startServer } from '../game/server.js';
 import { DemoSimulation } from '../game/simulation.js';
-import { registry, scenes } from '../game/scene.js';
+import { modelNames, modelUrl, registry, scenes } from '../game/scene.js';
 
 const server = await startServer(0);
 const vite = await createServer({
@@ -80,19 +81,29 @@ try {
   await ticks(local, 8);
   assert.equal(await x(local), blurred, 'Blur must release movement');
   await local.keyboard.up('d');
+  const visit = async (scene: string) => {
+    await local.locator(`[data-scene="${scene}"]`).click();
+    await rendered(local);
+  };
+  await visit('courtyard');
+  await visit('workshop');
   const baseline = await memory(local);
   for (let i = 0; i < 8; i++) {
-    await local.locator('[data-scene="courtyard"]').click();
-    await rendered(local);
-    await local.locator('[data-scene="workshop"]').click();
-    await rendered(local);
+    await visit('courtyard');
+    await visit('workshop');
   }
-  assert.deepEqual(await memory(local), baseline, 'Scene changes must release GPU resources');
-  assert.equal(await local.evaluate(() => (window as any).__engine.local.state.changes), 16);
+  assert.deepEqual(
+    await memory(local),
+    baseline,
+    'Scene changes must release everything but shared model geometry',
+  );
+  assert.equal(await local.evaluate(() => (window as any).__engine.local.state.changes), 18);
   await local.screenshot({ path: 'evidence/browser/local.jpg', type: 'jpeg', quality: 85 });
 
   const nodeHashes: number[] = [];
-  const sim = new DemoSimulation('workshop');
+  const models = new Models((name) => readFile(modelUrl(name)));
+  await models.load(modelNames);
+  const sim = new DemoSimulation('workshop', models);
   try {
     sim.join('player:0', 0);
     for (let i = 0; i < 180; i++) {
@@ -105,7 +116,7 @@ try {
   const browserHashes = await local.evaluate(async () => {
     const path = '/game/simulation.ts';
     const { DemoSimulation } = await import(path);
-    const sim = new DemoSimulation('workshop');
+    const sim = new DemoSimulation('workshop', (window as any).__engine.models);
     try {
       sim.join('player:0', 0);
       const hashes: number[] = [];

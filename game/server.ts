@@ -1,9 +1,12 @@
 // The room server: one Session per room, a tick loop while it has players, a snapshot per tick.
+import { readFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
+import { Models } from '../src/assets.js';
 import { CommandQueue, Replicator, Session, scheduleTicks } from '../src/index.js';
 import { initPhysics } from '../src/physics.js';
 import { DemoSimulation } from './simulation.js';
+import { modelNames, modelUrl } from './scene.js';
 import { TPS, idle, type Command } from './movement.js';
 import {
   parseClientMessage,
@@ -26,6 +29,9 @@ const SEND_BUFFER_LIMIT = 1024 * 1024; // bytes queued to a socket before its cl
 const HEARTBEAT_MS = 30_000;
 const ROOM_NAME = /^[a-zA-Z0-9_-]{1,32}$/;
 
+// The server reads model files from disk; the browser gives the same class a fetch instead.
+const models = new Models((name) => readFile(modelUrl(name)));
+
 interface Client {
   socket: WebSocket;
   id: string;
@@ -37,7 +43,11 @@ interface Client {
 class Room {
   readonly clients = new Map<WebSocket, Client>();
   // Session owns the current DemoSimulation plus the state that survives scene changes.
-  readonly session = new Session({ changes: 0 }, (scene) => new DemoSimulation(scene), 'workshop');
+  readonly session = new Session(
+    { changes: 0 },
+    (scene) => new DemoSimulation(scene, models),
+    'workshop',
+  );
   emptySince = Date.now();
   private stop?: () => void;
   private events: Snapshot['events'] = []; // announcements to include in the next snapshot
@@ -171,7 +181,7 @@ function rateLimiter(perSecond: number): () => boolean {
 }
 
 export async function startServer(port = 3000, host = '127.0.0.1', roomTtlMs = 600_000) {
-  await initPhysics();
+  await Promise.all([initPhysics(), models.load(modelNames)]);
   const rooms = new Map<string, Room>();
   const http = await listen(port, host);
   const websocket = new WebSocketServer({ server: http, path: '/ws', maxPayload: 4096 });

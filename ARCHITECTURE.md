@@ -4,7 +4,7 @@ This is the guided tour. It explains what runs where, what happens in one tick a
 
 ## The short version
 
-- `src/` is the **engine**: small headless primitives with no opinion about your game. The root entry point imports no DOM, Rapier, Three.js or Node API. `src/physics.ts` (Rapier) and `src/browser.ts` (Three.js, input) are optional adapters.
+- `src/` is the **engine**: small headless primitives with no opinion about your game. The root entry point imports no DOM, Rapier, Three.js or Node API. `src/physics.ts` (Rapier), `src/browser.ts` (Three.js, input) and `src/assets.ts` (Three.js model loading, headless too) are optional adapters.
 - `game/` is the **workshop**: one small game built on those primitives. It owns the rules, the scene content, the public state shape and the wire protocol.
 - `main.ts` and `server.ts` are the **entry points**. `main.ts` runs in the browser and picks a mode from the URL. `server.ts` runs in Node and hosts rooms.
 
@@ -40,6 +40,7 @@ flowchart TB
   subgraph adapters["src/ — optional adapters"]
     physics["physics.ts<br/>PhysicsWorld over Rapier"]
     browser["browser.ts<br/>Keyboard, createRenderer, RenderObjects over Three.js"]
+    assets["assets.ts<br/>Models: GLB files to one geometry"]
   end
 
   main --> local & online & view
@@ -47,8 +48,8 @@ flowchart TB
   local --> sim
   online --> protocol
   room --> sim & protocol
-  sim --> scene & movement & physics
-  view --> scene & browser
+  sim --> scene & movement & physics & assets
+  view --> scene & browser & assets
   local & online & room --> loop & net
   scene --> schema
   sim --> loop & det
@@ -84,8 +85,8 @@ flowchart LR
   parse --> doc["SceneDocument<br/>version, id, settings, objects"]
   doc --> expand["registry.expand()<br/>run generators with Rng(seed),<br/>namespace child ids as stack/0…"]
   expand --> objects["SceneObject[]<br/>floor, arrival, stack/0 … stack/11"]
-  objects --> place["DemoSimulation.place()<br/>Rapier cuboid per object<br/>dynamic body for boxes"]
-  objects --> load["DemoView.load()<br/>Three.js BoxGeometry + material<br/>per object"]
+  objects --> place["DemoSimulation.place()<br/>Rapier cuboid per block,<br/>convex hull per prop,<br/>dynamic body for boxes"]
+  objects --> load["DemoView.load()<br/>Three.js box or model mesh<br/>per object"]
   objects --> content["protocol.ts CONTENT<br/>hash of every expanded scene"]
   doc --> bake["registry.bake(doc, 'stack')<br/>replace generator with its objects"]
   bake --> serialize["registry.serialize()<br/>pretty JSON download"]
@@ -241,14 +242,15 @@ flowchart TB
     main["main.ts pagehide"] --> client["LocalClient or OnlineClient"]
     main --> kb["Keyboard"]
     main --> dv["DemoView"]
+    main --> models["Models<br/>(model geometry, shared)"]
     client -.->|"local only"| session2["Session → DemoSimulation<br/>(same chain as the server)"]
     dv --> ro["RenderObjects"]
-    ro --> gpu["meshes, geometries,<br/>materials, textures"]
+    ro --> gpu["meshes, box geometries,<br/>materials, textures"]
     dv --> renderer["WebGPURenderer"]
   end
 ```
 
-`RenderObjects` frees a geometry or material only when the last mesh using it is removed. The browser test switches scenes 16 times and asserts the renderer's memory counters return to baseline.
+`RenderObjects` frees a geometry or material only when the last mesh using it is removed. Model geometry is owned by `Models`, passed in as the shared set, and survives scene changes. The browser test switches scenes 16 times and asserts the renderer's memory counters return to baseline.
 
 ## Determinism and replay
 
@@ -296,6 +298,7 @@ Every client message is validated with the same `Schema` machinery that validate
 | `src/random.ts` `src/hash.ts` `src/replay.ts` | `Rng`, `Hasher`, `Recorder`, `verifyReplay`                                      | determinism checks                                |
 | `src/physics.ts`                              | `PhysicsWorld`: ownership and collision callbacks over Rapier                    | bodies, colliders, joints, queries                |
 | `src/browser.ts`                              | `createRenderer`, `Keyboard`, `RenderObjects`                                    | input and GPU resource lifetime                   |
+| `src/assets.ts`                               | `Models`: GLB files to one vertex-coloured geometry, on server and client        | props and their colliders                         |
 | `game/scene.ts`                               | the workshop's object types, schemas, generator and the two scene files          | changing the content                              |
 | `game/movement.ts`                            | `TPS`, `Command`, `move()`                                                       | how players move                                  |
 | `game/protocol.ts`                            | message schemas (types are inferred from them), `Pose`, `PublicState`, `CONTENT` | changing the wire format                          |

@@ -22,6 +22,8 @@ const size = object({ x: positive, y: positive, z: positive });
 const acceleration = { type: 'number', unit: 'm/s²' } as const satisfies Schema;
 // A block is placed by its transform: position in meters and an optional rotation in degrees.
 const block = object({ ...transform, size, color: string });
+// A prop is a model file drawn and collided as is, scaled uniformly.
+const prop = object({ ...transform, model: string, scale: { ...number, min: 0.01, max: 100 } });
 
 // The registry knows every allowed type and validates object settings against its schema.
 export const registry = new SceneRegistry(
@@ -29,6 +31,7 @@ export const registry = new SceneRegistry(
     ground: block, // static: a bare collider that never moves
     box: block, // dynamic: a rigid body that falls and can be pushed
     spawn: object({ position: vector }), // where players appear
+    prop, // static: a convex hull of the model
   },
   {
     // A generator expands a seed into ordinary objects with game code, so scenes stay small.
@@ -72,3 +75,11 @@ export function getScene(id: string): WorkshopScene {
   if (!Object.hasOwn(scenes, id)) throw new Error(`Unknown scene: ${id}`);
   return scenes[id as keyof typeof scenes];
 }
+
+// Model files live beside the scenes; the browser fetches them and the server reads them from disk.
+export const modelUrl = (name: string): URL => new URL(`./assets/${name}`, import.meta.url);
+export const modelNames = new Set(
+  Object.values(scenes)
+    .flatMap((scene) => registry.expand(scene))
+    .flatMap((entry) => (entry.type === 'prop' ? [entry.settings.model] : [])),
+);

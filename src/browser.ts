@@ -117,7 +117,10 @@ function resourcesOf(root: Object3D): Set<{ dispose(): void }> {
 
 export class RenderObjects {
   readonly objects = new Map<string, Object3D>();
-  constructor(readonly root: Object3D) {}
+  constructor(
+    readonly root: Object3D,
+    private readonly shared: ReadonlySet<{ dispose(): void }> = new Set(),
+  ) {}
 
   add(id: string, object: Object3D): void {
     if (this.objects.has(id) || [...this.objects.values()].includes(object))
@@ -131,9 +134,9 @@ export class RenderObjects {
     if (!object) return;
     this.objects.delete(id);
     object.removeFromParent();
-    const shared = this.allResources();
+    const kept = this.allResources();
     for (const resource of resourcesOf(object)) {
-      if (!shared.has(resource)) resource.dispose();
+      if (!kept.has(resource) && !this.shared.has(resource)) resource.dispose();
     }
   }
 
@@ -141,7 +144,7 @@ export class RenderObjects {
     const resources = this.allResources();
     for (const object of this.objects.values()) object.removeFromParent();
     this.objects.clear();
-    for (const resource of resources) resource.dispose();
+    for (const resource of resources) if (!this.shared.has(resource)) resource.dispose();
   }
 
   private allResources(): Set<{ dispose(): void }> {

@@ -51,6 +51,7 @@ The browser check exercises local input, repeated scene changes and GPU disposal
 | `@sneakpeak/engine`         | Scene data, schemas, seeded random streams, phases, entities, clocks, sessions, command queues, replication, prediction, interpolation and replay |
 | `@sneakpeak/engine/physics` | Pinned deterministic Rapier build, explicit body/collider ownership and collision callbacks                                                       |
 | `@sneakpeak/engine/browser` | Keyboard, renderer initialization and render-resource ownership; requires Three.js                                                                |
+| `@sneakpeak/engine/assets`  | GLB models loaded once into one vertex-coloured geometry, on the server as well as in the browser; requires Three.js                              |
 
 The package is private and is not published. Build it before consuming it as a local package. `game/`, `main.ts` and `server.ts` are an executable integration example, not part of the exported library. `main.ts` only wires the page; local play lives in `game/local.ts` and room play in `game/online.ts`. The demo files carry short comments that explain how they use the engine; the engine itself has none. Rooms, authentication policy and wire messages belong there until a second game proves what should be shared.
 
@@ -96,7 +97,11 @@ The workshop builds physics and visuals from the same expanded settings, in mete
 
 Call `initPhysics()` before constructing a physics world. `PhysicsWorld.add()` can create a body with several colliders or collider-only geometry. Collision callbacks use `onCollision`. Queries, joints and character controllers are available through `.world` and `RAPIER`, without duplicating Rapier's API. Remove managed objects through the adapter so its ownership maps remain correct; do not free the underlying world yourself. Removing objects inside collision callbacks is supported; recursive stepping or disposing the world during a step is rejected.
 
-`RenderObjects` owns added trees and their geometries, materials and directly referenced textures. It preserves resources shared by other trees in the same collection, then frees them when the final owner disappears. Do not share these assets across independently disposed collections. Custom shader uniforms, node graphs, render targets and externally cached assets need their own explicit ownership. Dispose input listeners, sessions, physics and rendering on shutdown.
+`RenderObjects` owns added trees and their geometries, materials and directly referenced textures. It preserves resources shared by other trees in the same collection, then frees them when the final owner disappears. Resources owned elsewhere, such as model geometry from `Models`, are passed in as the shared set and never disposed by the collection. Custom shader uniforms, node graphs, render targets and externally cached assets need their own explicit ownership. Dispose input listeners, sessions, physics and rendering on shutdown.
+
+### Models
+
+`Models` loads GLB files once per runtime through a caller-supplied `read` function, so the server reads them from disk and the browser fetches them with the same class. Each file becomes one geometry: node transforms applied, faces de-indexed for flat shading, material colours baked into a vertex colour attribute, textures skipped. `Model.positions` feeds Rapier's `ColliderDesc.convexHull` or `trimesh`, so a prop's collider comes from the same file the client draws, and the Node and Chromium fingerprint covers that path. Pass `models.geometries` to `RenderObjects` as its shared set; `Models.dispose()` frees them. Textured or animated models, instancing and height normalisation stay with the game.
 
 ### Networking contracts
 

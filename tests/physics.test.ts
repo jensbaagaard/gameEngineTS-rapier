@@ -1,8 +1,12 @@
+import { readFile } from 'node:fs/promises';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { Models } from '../src/assets.js';
 import { initPhysics, PhysicsWorld, RAPIER } from '../src/physics.js';
+import { modelNames, modelUrl } from '../game/scene.js';
 import { DemoSimulation } from '../game/simulation.js';
 
-beforeAll(initPhysics);
+const models = new Models((name) => readFile(modelUrl(name)));
+beforeAll(() => Promise.all([initPhysics(), models.load(modelNames)]));
 
 describe('physics ownership', () => {
   it('ignores foreign objects and safely removes objects during collision callbacks', () => {
@@ -85,21 +89,24 @@ describe('physics ownership', () => {
       physics.dispose();
     }
   });
-  it('places scene objects with their authored rotation', () => {
-    const sim = new DemoSimulation('workshop');
+  it('places scene objects with their authored rotation and hulls props from their models', () => {
+    const sim = new DemoSimulation('workshop', models);
     try {
       const { x, y, z, w } = sim.objects.get('ramp')!.colliders[0]!.rotation();
       const halfAngle = (-10 * Math.PI) / 180;
       expect([x, y]).toEqual([0, 0]);
       expect(z).toBeCloseTo(Math.sin(halfAngle), 6);
       expect(w).toBeCloseTo(Math.cos(halfAngle), 6);
+      const crate = sim.objects.get('crate')!.colliders[0]!;
+      expect(crate.shape.type).toBe(RAPIER.ShapeType.ConvexPolyhedron);
+      expect(crate.translation()).toEqual({ x: 2, y: 0.75, z: -1 });
     } finally {
       sim.dispose();
     }
   });
   it('hashes the entire physics world identically for the same commands', () => {
     const run = () => {
-      const sim = new DemoSimulation('workshop');
+      const sim = new DemoSimulation('workshop', models);
       try {
         sim.join('player:0', 0);
         const hashes: number[] = [];
@@ -115,7 +122,7 @@ describe('physics ownership', () => {
     const hashes = run();
     expect(hashes).toEqual(run());
     expect(hashes.filter((_, index) => (index + 1) % 30 === 0)).toEqual([
-      0x6abb3ad3, 0x75411985, 0xec8efbef, 0x194316b2, 0x4f81419b, 0xd26aac18,
+      0xe7d0e4d5, 0x751f1551, 0x7add4d24, 0x47320ce5, 0xc3d0bb87, 0xf1612512,
     ]);
   });
 });

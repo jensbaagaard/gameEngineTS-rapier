@@ -1,7 +1,8 @@
+import { Models } from './src/assets.js';
 import { Keyboard, createRenderer } from './src/browser.js';
 import type { Command } from './game/movement.js';
 import { OnlineClient } from './game/online.js';
-import { getScene, registry } from './game/scene.js';
+import { getScene, modelNames, modelUrl, registry } from './game/scene.js';
 import { DemoView } from './game/view.js';
 
 const query = new URLSearchParams(location.search);
@@ -19,13 +20,17 @@ const renderer = await createRenderer(canvas, query.get('gl') === 'webgl').catch
   setStatus(error instanceof Error ? error.message : 'Graphics initialization failed');
   throw error;
 });
-const view = new DemoView(renderer);
+const models = new Models((name) =>
+  fetch(modelUrl(name)).then((response) => response.arrayBuffer()),
+);
+await models.load(modelNames);
+const view = new DemoView(renderer, models);
 const keyboard = new Keyboard();
 view.load('workshop');
 
 async function createLocalClient() {
   const { LocalClient } = await import('./game/local.js');
-  return LocalClient.create(view, 'player:0', 'workshop', setStatus);
+  return LocalClient.create(view, models, 'player:0', 'workshop', setStatus);
 }
 
 function inRoom(value: boolean): void {
@@ -116,6 +121,7 @@ window.addEventListener(
     keyboard.dispose();
     listeners.abort();
     view.dispose();
+    models.dispose();
   },
   { once: true },
 );
@@ -124,6 +130,7 @@ Object.assign(window, {
   __engine: {
     mode,
     view,
+    models,
     local: local?.session,
     get state() {
       return client?.state ?? {};

@@ -85,6 +85,9 @@ This branch updates **only the engine repository**. Checked items are implemente
 - [x] Leave text fields editable and dispose input listeners.
 - [ ] Expose mouse deltas/buttons and pointer-lock request/release. Nothing in `src/browser.ts` does this yet; Definitely Safe's input module is the reference, to extract once a second first-person consumer exists.
 - [x] Free scene geometry/material/direct texture resources, including sharing within a render collection.
+- [x] Load GLB models once per runtime into one vertex-coloured geometry, on the server as well as in the browser; `RenderObjects` leaves model geometry to its owner.
+- [x] Build a prop's convex hull collider from the same model file the client draws; the Node and Chromium fingerprint covers it.
+- [ ] Textured and animated models, instanced rendering and height normalisation stay in the game until a second consumer needs them.
 - [x] Check actual WebGPU device availability and use WebGL2 when unavailable; support forcing WebGL2.
 - [ ] Validate native WebGPU, GPU failure paths and touch/browser compatibility across target devices.
 - [ ] Port and visually compare Definitely Safe's renderer, effects and complete resource graph. A lit-box demo does not establish renderer parity.
